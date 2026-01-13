@@ -1,73 +1,123 @@
-# Welcome to your Lovable project
+# Sage Embedded Services Demo
 
-## Project info
+A demonstration web application showcasing Sage Embedded Services API capabilities for prospective customers. This app simulates a small business owner's experience while demonstrating core API features.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Authentication**: Simple login gate for demo access
+- **Tenant Management**: Create and manage business tenants
+- **Bank Accounts**: Add bank accounts with opening balances
+- **Financial Years**: Set up accounting periods
+- **CSV Upload**: Import bank payments and receipts from CSV files
+- **P&L Reports**: Generate Profit & Loss reports
 
-There are several ways of editing your application.
+## Getting Started
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Node.js 18+ 
+- npm or bun
 
-Changes made via Lovable will be committed automatically to this repo.
+### Installation
 
-**Use your preferred IDE**
+```bash
+# Install dependencies
+npm install
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
+
+# Build for production
+npm run build
 ```
 
-**Edit a file directly in GitHub**
+### Demo Login
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **Password**: `sage2024`
 
-**Use GitHub Codespaces**
+## Configuration
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Admin Settings
 
-## What technologies are used for this project?
+Navigate to **Admin Settings** to configure your Sage API credentials:
 
-This project is built with:
+1. **OAuth Credentials**
+   - Client ID
+   - Client Secret
 
-- Vite
+2. **Subscription Credentials**
+   - Subscription Client ID
+   - Subscription Client Secret
+
+3. **Subscription Settings** (from [subscriptions endpoint](https://developer.columbus.sage.com/docs/services/sage-ses-subscriptions-api/operations/Tenants_GetSubscriptionAsync))
+   - Product Code (e.g., `SAGE_ONE`)
+   - Platform (e.g., `UK`)
+   - Business Type Code (e.g., `SOLE_TRADER`)
+
+### Tenant Selection
+
+After creating tenants, use the dropdown in the sidebar to select the active tenant for all operations.
+
+## CSV Format for Transactions
+
+Upload bank payments and receipts using a CSV file with the following format:
+
+```csv
+date,type,description,reference,amount,category
+2024-01-15,receipt,Client Payment - ABC Corp,INV-001,5000.00,Sales
+2024-01-18,payment,Office Supplies,PO-123,150.00,Office Expenses
+2024-01-20,receipt,Consulting Fee,INV-002,2500.00,Sales
+2024-01-22,payment,Software Subscription,SUB-001,99.00,Software
+2024-01-25,payment,Travel Expenses,EXP-001,350.00,Travel
+2024-01-28,receipt,Product Sale,INV-003,1200.00,Sales
+```
+
+### Column Definitions
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| `date` | Transaction date (YYYY-MM-DD) | `2024-01-15` |
+| `type` | Either `payment` or `receipt` | `receipt` |
+| `description` | Transaction description | `Client Payment - ABC Corp` |
+| `reference` | Reference number | `INV-001` |
+| `amount` | Transaction amount | `5000.00` |
+| `category` | Expense/income category | `Sales` |
+
+A sample CSV file can be downloaded from the Transactions page.
+
+## API Endpoints Used
+
+This demo simulates the following Sage Embedded Services API endpoints:
+
+- `POST /oauth/token` - Authentication
+- `POST /tenants` - Create tenant
+- `GET /tenants` - List tenants
+- `POST /bank_accounts` - Create bank account
+- `POST /bank_opening_balances` - Set opening balance
+- `POST /financial_settings` - Create financial year
+- `POST /bank_payments` - Create bank payment
+- `POST /bank_receipts` - Create bank receipt
+- `GET /reports/profit_and_loss` - Generate P&L report
+
+## Tech Stack
+
+- React 18
 - TypeScript
-- React
-- shadcn-ui
 - Tailwind CSS
+- shadcn/ui components
+- React Router
+- TanStack Query
 
-## How can I deploy this project?
+## Data Storage
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+This demo stores all data locally in the browser using localStorage. In a production environment, data would be stored securely on the server and synced with Sage's API.
 
-## Can I connect a custom domain to my Lovable project?
+## API Documentation
 
-Yes, you can!
+For full API documentation, visit:
+- [Sage Embedded Services OpenAPI](https://developer.columbus.sage.com/docs/services/sage-ses-core-api)
+- [Subscriptions API](https://developer.columbus.sage.com/docs/services/sage-ses-subscriptions-api)
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## License
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Demo application for demonstration purposes only.
