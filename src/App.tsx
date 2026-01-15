@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider, useApp } from "@/contexts/AppContext";
+import { DeveloperModeProvider } from "@/contexts/DeveloperModeContext";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
@@ -12,6 +13,7 @@ import BankAccounts from "./pages/BankAccounts";
 import FinancialYears from "./pages/FinancialYears";
 import Transactions from "./pages/Transactions";
 import Reports from "./pages/Reports";
+import NetworkConsole from "./pages/NetworkConsole";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -91,6 +93,14 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+      <Route 
+        path="/network-console" 
+        element={
+          <ProtectedRoute>
+            <NetworkConsole />
+          </ProtectedRoute>
+        } 
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -103,7 +113,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AppProvider>
-          <AppRoutes />
+          <DeveloperModeProvider>
+            <AppRoutes />
+          </DeveloperModeProvider>
         </AppProvider>
       </BrowserRouter>
     </TooltipProvider>
