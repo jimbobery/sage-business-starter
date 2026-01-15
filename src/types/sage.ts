@@ -79,3 +79,94 @@ export interface AppState {
   financialYears: FinancialYear[];
   transactions: BankTransaction[];
 }
+
+// API Response types
+export interface ApiError {
+  error: string;
+  message: string;
+  status: number;
+  requestId?: string;
+}
+
+// Token metadata for Developer Mode display
+export interface TokenMetadata {
+  expiresAt: number;
+  expiresIn: number;
+  scope?: string;
+  audience?: string;
+  isValid: boolean;
+  lastRefresh: number | null;
+}
+
+// API Log entry for IndexedDB
+export interface ApiLogEntry {
+  id?: number;
+  requestId: string;
+  timestamp: string;
+  method: string;
+  url: string;
+  status: number;
+  statusText: string;
+  durationMs: number;
+  requestHeaders: Record<string, string>;
+  requestBody: string | null;
+  responseHeaders: Record<string, string>;
+  responseBody: string | null;
+  tenantId: string | null;
+  featureArea: string;
+  error?: string;
+}
+
+// Sage API specific types
+export interface SageTenantRequest {
+  name: string;
+  businessName: string;
+  productCode: string;
+  platform: string;
+  businessTypeCode: string;
+}
+
+export interface SageBankAccountRequest {
+  accountName: string;
+  accountNumber: string;
+  sortCode: string;
+  currency: string;
+}
+
+export interface SageOpeningBalanceRequest {
+  bankAccountId: string;
+  amount: number;
+  date: string;
+}
+
+export interface SageFinancialYearRequest {
+  startDate: string;
+  endDate: string;
+}
+
+export interface SageBankPaymentRequest {
+  date: string;
+  bankAccountId: string;
+  reference: string;
+  description: string;
+  amount: number;
+  category?: string;
+}
+
+export interface SageBankReceiptRequest {
+  date: string;
+  bankAccountId: string;
+  reference: string;
+  description: string;
+  amount: number;
+  category?: string;
+}
+
+// CSV upload types
+export interface CsvUploadResult {
+  row: number;
+  success: boolean;
+  status?: number;
+  message?: string;
+  data?: BankTransaction;
+}

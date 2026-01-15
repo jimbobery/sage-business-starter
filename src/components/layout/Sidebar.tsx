@@ -8,9 +8,11 @@ import {
   FileText, 
   Settings,
   LogOut,
-  ChevronDown
+  Terminal
 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
+import { DeveloperModeToggle } from '@/components/developer/DeveloperModeToggle';
 import {
   Select,
   SelectContent,
@@ -33,6 +35,7 @@ const navItems = [
 export function Sidebar() {
   const location = useLocation();
   const { tenants, activeTenantId, setActiveTenant, logout } = useApp();
+  const { isDeveloperMode } = useDeveloperMode();
 
   return (
     <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col h-screen fixed left-0 top-0">
@@ -92,8 +95,31 @@ export function Sidebar() {
               </li>
             );
           })}
+          
+          {/* Network Console - only visible in Developer Mode */}
+          {isDeveloperMode && (
+            <li>
+              <Link
+                to="/network-console"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  location.pathname === '/network-console'
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <Terminal className="w-5 h-5" />
+                Network Console
+              </Link>
+            </li>
+          )}
         </ul>
       </nav>
+
+      {/* Developer Mode Toggle */}
+      <div className="px-3 py-2 border-t border-sidebar-border">
+        <DeveloperModeToggle />
+      </div>
 
       {/* Logout */}
       <div className="p-4 border-t border-sidebar-border">
