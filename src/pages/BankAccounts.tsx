@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +9,8 @@ import {
   Plus, 
   Landmark,
   AlertCircle,
-  Banknote
+  Banknote,
+  Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -25,13 +27,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
+import { bankService } from '@/services/bankService';
 
 export default function BankAccounts() {
-  const { bankAccounts, activeTenantId, addBankAccount, addOpeningBalance, getActiveTenant } = useApp();
+  const { bankAccounts, activeTenantId, addBankAccount, addOpeningBalance, getActiveTenant, credentials } = useApp();
+  const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [isBalanceDialogOpen, setIsBalanceDialogOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const [accountForm, setAccountForm] = useState({
     accountName: '',
@@ -48,41 +54,95 @@ export default function BankAccounts() {
   const activeTenant = getActiveTenant();
   const tenantAccounts = bankAccounts.filter(a => a.tenantId === activeTenantId);
 
-  const handleCreateAccount = (e: React.FormEvent) => {
+  const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenantId) return;
     
-    addBankAccount({
-      ...accountForm,
-      tenantId: activeTenantId,
-      balance: 0,
-    });
+    if (!credentials?.clientId || !credentials?.clientSecret) {
+      toast({
+        title: "Configuration required",
+        description: "Please configure your API credentials in Admin Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
     
-    setAccountForm({ accountName: '', accountNumber: '', sortCode: '', currency: 'GBP' });
-    setIsAccountDialogOpen(false);
-    toast({
-      title: "Bank account created",
-      description: `${accountForm.accountName} has been added successfully.`,
-    });
+    try {
+      // Call real API
+      await bankService.createBankAccount(activeTenantId, accountForm);
+      
+      // Also add to local state for UI
+      addBankAccount({
+        ...accountForm,
+        tenantId: activeTenantId,
+        balance: 0,
+      });
+      
+      setAccountForm({ accountName: '', accountNumber: '', sortCode: '', currency: 'GBP' });
+      setIsAccountDialogOpen(false);
+      toast({
+        title: "Bank account created",
+        description: `${accountForm.accountName} has been added successfully.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to create bank account",
+        description: error.message || "An error occurred while creating the bank account.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSetBalance = (e: React.FormEvent) => {
+  const handleSetBalance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAccountId) return;
+    if (!selectedAccountId || !activeTenantId) return;
     
-    addOpeningBalance({
-      bankAccountId: selectedAccountId,
-      amount: parseFloat(balanceForm.amount),
-      date: balanceForm.date,
-    });
+    if (!credentials?.clientId || !credentials?.clientSecret) {
+      toast({
+        title: "Configuration required",
+        description: "Please configure your API credentials in Admin Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
     
-    setBalanceForm({ amount: '', date: new Date().toISOString().split('T')[0] });
-    setIsBalanceDialogOpen(false);
-    setSelectedAccountId(null);
-    toast({
-      title: "Opening balance set",
-      description: "The opening balance has been recorded.",
-    });
+    try {
+      // Call real API
+      await bankService.createOpeningBalance(activeTenantId, {
+        bankAccountId: selectedAccountId,
+        amount: parseFloat(balanceForm.amount),
+        date: balanceForm.date,
+      });
+      
+      // Also update local state
+      addOpeningBalance({
+        bankAccountId: selectedAccountId,
+        amount: parseFloat(balanceForm.amount),
+        date: balanceForm.date,
+      });
+      
+      setBalanceForm({ amount: '', date: new Date().toISOString().split('T')[0] });
+      setIsBalanceDialogOpen(false);
+      setSelectedAccountId(null);
+      toast({
+        title: "Opening balance set",
+        description: "The opening balance has been recorded.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to set opening balance",
+        description: error.message || "An error occurred while setting the opening balance.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!activeTenantId) {
@@ -139,6 +199,7 @@ export default function BankAccounts() {
                     onChange={(e) => setAccountForm(prev => ({ ...prev, accountName: e.target.value }))}
                     placeholder="e.g., Business Current Account"
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -150,6 +211,7 @@ export default function BankAccounts() {
                       onChange={(e) => setAccountForm(prev => ({ ...prev, accountNumber: e.target.value }))}
                       placeholder="12345678"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -160,6 +222,7 @@ export default function BankAccounts() {
                       onChange={(e) => setAccountForm(prev => ({ ...prev, sortCode: e.target.value }))}
                       placeholder="12-34-56"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -168,6 +231,7 @@ export default function BankAccounts() {
                   <Select 
                     value={accountForm.currency} 
                     onValueChange={(value) => setAccountForm(prev => ({ ...prev, currency: value }))}
+                    disabled={isLoading}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -180,10 +244,11 @@ export default function BankAccounts() {
                   </Select>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setIsAccountDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setIsAccountDialogOpen(false)} disabled={isLoading}>
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Add Account
                   </Button>
                 </div>
@@ -268,6 +333,7 @@ export default function BankAccounts() {
                   onChange={(e) => setBalanceForm(prev => ({ ...prev, amount: e.target.value }))}
                   placeholder="0.00"
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -278,13 +344,15 @@ export default function BankAccounts() {
                   value={balanceForm.date}
                   onChange={(e) => setBalanceForm(prev => ({ ...prev, date: e.target.value }))}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsBalanceDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsBalanceDialogOpen(false)} disabled={isLoading}>
                   Cancel
                 </Button>
-                <Button type="submit">
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Set Balance
                 </Button>
               </div>
@@ -292,14 +360,23 @@ export default function BankAccounts() {
           </DialogContent>
         </Dialog>
 
-        {/* API Info */}
-        <div className="mt-8 p-4 bg-muted rounded-lg">
-          <h3 className="font-medium text-foreground mb-2">API Integration</h3>
-          <p className="text-sm text-muted-foreground">
-            Bank accounts are created via <code className="bg-background px-1 rounded">POST /bank_accounts</code> and 
-            opening balances via <code className="bg-background px-1 rounded">POST /bank_opening_balances</code>.
-          </p>
-        </div>
+        {/* API Integration Panel - Only visible in Developer Mode */}
+        {isDeveloperMode && (
+          <div className="mt-8">
+            <ApiIntegrationPanel featureArea="bank-accounts" />
+          </div>
+        )}
+
+        {/* API Info - Always visible when not in dev mode */}
+        {!isDeveloperMode && (
+          <div className="mt-8 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium text-foreground mb-2">API Integration</h3>
+            <p className="text-sm text-muted-foreground">
+              Bank accounts are created via <code className="bg-background px-1 rounded">POST /bank_accounts</code> and 
+              opening balances via <code className="bg-background px-1 rounded">POST /bank_opening_balances</code>.
+            </p>
+          </div>
+        )}
       </div>
     </MainLayout>
   );

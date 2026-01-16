@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +10,7 @@ import {
   Building2, 
   CheckCircle2,
   Clock,
-  MoreHorizontal
+  Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -20,26 +21,60 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
+import { subscriptionService } from '@/services/subscriptionService';
 
 export default function Tenants() {
-  const { tenants, activeTenantId, addTenant, setActiveTenant } = useApp();
+  const { tenants, activeTenantId, addTenant, setActiveTenant, credentials } = useApp();
+  const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     businessName: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const tenant = addTenant(formData);
-    setActiveTenant(tenant.id);
-    setFormData({ name: '', businessName: '' });
-    setIsDialogOpen(false);
-    toast({
-      title: "Tenant created",
-      description: `${formData.businessName} has been created successfully.`,
-    });
+    
+    if (!credentials?.subscriptionClientId || !credentials?.subscriptionClientSecret) {
+      toast({
+        title: "Configuration required",
+        description: "Please configure your API credentials in Admin Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Call real API
+      const response = await subscriptionService.createTenant(formData);
+      
+      // Also add to local state for UI
+      const tenant = addTenant({
+        name: formData.name,
+        businessName: formData.businessName,
+      });
+      setActiveTenant(tenant.id);
+      
+      setFormData({ name: '', businessName: '' });
+      setIsDialogOpen(false);
+      toast({
+        title: "Tenant created",
+        description: `${formData.businessName} has been created successfully.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to create tenant",
+        description: error.message || "An error occurred while creating the tenant.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -74,6 +109,7 @@ export default function Tenants() {
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., John Smith"
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -84,13 +120,15 @@ export default function Tenants() {
                     onChange={(e) => setFormData(prev => ({ ...prev, businessName: e.target.value }))}
                     placeholder="e.g., Smith's Consulting Ltd"
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Create Tenant
                   </Button>
                 </div>
@@ -154,14 +192,23 @@ export default function Tenants() {
           </div>
         )}
 
-        {/* API Info */}
-        <div className="mt-8 p-4 bg-muted rounded-lg">
-          <h3 className="font-medium text-foreground mb-2">API Integration</h3>
-          <p className="text-sm text-muted-foreground">
-            In production, tenants are created via the <code className="bg-background px-1 rounded">POST /tenants</code> endpoint. 
-            This demo simulates the tenant creation process locally.
-          </p>
-        </div>
+        {/* API Integration Panel - Only visible in Developer Mode */}
+        {isDeveloperMode && (
+          <div className="mt-8">
+            <ApiIntegrationPanel featureArea="tenants" />
+          </div>
+        )}
+
+        {/* API Info - Always visible */}
+        {!isDeveloperMode && (
+          <div className="mt-8 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium text-foreground mb-2">API Integration</h3>
+            <p className="text-sm text-muted-foreground">
+              Tenants are created via the <code className="bg-background px-1 rounded">POST /subscriptions/tenants</code> endpoint 
+              using the subscription service token.
+            </p>
+          </div>
+        )}
       </div>
     </MainLayout>
   );

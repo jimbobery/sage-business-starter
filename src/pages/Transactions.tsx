@@ -1,15 +1,18 @@
 import { useState, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Button } from '@/components/ui/button';
 import { 
   Upload, 
   FileText,
   AlertCircle,
   CheckCircle2,
+  XCircle,
   Download,
   ArrowDownLeft,
-  ArrowUpRight
+  ArrowUpRight,
+  Loader2
 } from 'lucide-react';
 import {
   Select,
@@ -20,7 +23,9 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { BankTransaction } from '@/types/sage';
+import { BankTransaction, CsvUploadResult } from '@/types/sage';
+import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
+import { transactionService } from '@/services/transactionService';
 
 const SAMPLE_CSV = `date,type,description,reference,amount,category
 2024-01-15,receipt,Client Payment - ABC Corp,INV-001,5000.00,Sales
@@ -36,29 +41,52 @@ export default function Transactions() {
     transactions, 
     activeTenantId, 
     addTransactions, 
-    getActiveTenant 
+    getActiveTenant,
+    credentials 
   } = useApp();
+  const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [uploadedCount, setUploadedCount] = useState(0);
+  const [uploadResults, setUploadResults] = useState<CsvUploadResult[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   const activeTenant = getActiveTenant();
   const tenantAccounts = bankAccounts.filter(a => a.tenantId === activeTenantId);
   const tenantTransactions = transactions.filter(t => t.tenantId === activeTenantId);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !selectedAccountId || !activeTenantId) return;
 
+    if (!credentials?.clientId || !credentials?.clientSecret) {
+      toast({
+        title: "Configuration required",
+        description: "Please configure your API credentials in Admin Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadResults([]);
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       const lines = text.split('\n').filter(line => line.trim());
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       
-      const newTransactions: Omit<BankTransaction, 'id'>[] = [];
+      const parsedTransactions: Array<{
+        type: 'payment' | 'receipt';
+        date: string;
+        description: string;
+        reference: string;
+        amount: number;
+        category?: string;
+      }> = [];
       
+      // Parse CSV
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
         const row: Record<string, string> = {};
@@ -67,9 +95,7 @@ export default function Transactions() {
         });
         
         if (row.date && row.type && row.amount) {
-          newTransactions.push({
-            tenantId: activeTenantId,
-            bankAccountId: selectedAccountId,
+          parsedTransactions.push({
             type: row.type.toLowerCase() as 'payment' | 'receipt',
             date: row.date,
             description: row.description || '',
@@ -79,14 +105,61 @@ export default function Transactions() {
           });
         }
       }
-      
-      if (newTransactions.length > 0) {
-        addTransactions(newTransactions);
-        setUploadedCount(newTransactions.length);
+
+      if (parsedTransactions.length === 0) {
         toast({
-          title: "Transactions uploaded",
-          description: `${newTransactions.length} transactions have been imported.`,
+          title: "No valid transactions",
+          description: "The CSV file doesn't contain any valid transaction rows.",
+          variant: "destructive",
         });
+        setIsUploading(false);
+        return;
+      }
+
+      try {
+        // Call real API for each transaction
+        const results = await transactionService.uploadFromCsv(
+          activeTenantId,
+          selectedAccountId,
+          parsedTransactions
+        );
+
+        setUploadResults(results);
+
+        // Add successful transactions to local state
+        const successfulTransactions = results
+          .filter(r => r.success && r.data)
+          .map(r => r.data as BankTransaction);
+        
+        if (successfulTransactions.length > 0) {
+          addTransactions(successfulTransactions.map(t => ({
+            tenantId: t.tenantId,
+            bankAccountId: t.bankAccountId,
+            type: t.type,
+            date: t.date,
+            description: t.description,
+            reference: t.reference,
+            amount: t.amount,
+            category: t.category,
+          })));
+        }
+
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.filter(r => !r.success).length;
+
+        toast({
+          title: "Upload complete",
+          description: `${successCount} transactions uploaded${failCount > 0 ? `, ${failCount} failed` : ''}.`,
+          variant: failCount > 0 ? "destructive" : "default",
+        });
+      } catch (error: any) {
+        toast({
+          title: "Upload failed",
+          description: error.message || "An error occurred while uploading transactions.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploading(false);
       }
     };
     reader.readAsText(file);
@@ -150,7 +223,7 @@ export default function Transactions() {
                 <label className="text-sm font-medium text-foreground mb-2 block">
                   Select Bank Account
                 </label>
-                <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                <Select value={selectedAccountId} onValueChange={setSelectedAccountId} disabled={isUploading}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose an account" />
                   </SelectTrigger>
@@ -172,21 +245,42 @@ export default function Transactions() {
                   onChange={handleFileUpload}
                   className="hidden"
                   id="csv-upload"
+                  disabled={isUploading}
                 />
                 <Button 
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={!selectedAccountId || tenantAccounts.length === 0}
+                  disabled={!selectedAccountId || tenantAccounts.length === 0 || isUploading}
                   className="w-full"
                 >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload CSV File
+                  {isUploading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {isUploading ? 'Uploading...' : 'Upload CSV File'}
                 </Button>
               </div>
 
-              {uploadedCount > 0 && (
-                <div className="flex items-center gap-2 text-success text-sm">
-                  <CheckCircle2 className="w-4 h-4" />
-                  {uploadedCount} transactions uploaded successfully
+              {/* Upload Results */}
+              {uploadResults.length > 0 && (
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {uploadResults.map((result) => (
+                    <div
+                      key={result.row}
+                      className={cn(
+                        "flex items-center gap-2 text-sm p-2 rounded",
+                        result.success ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                      )}
+                    >
+                      {result.success ? (
+                        <CheckCircle2 className="w-4 h-4" />
+                      ) : (
+                        <XCircle className="w-4 h-4" />
+                      )}
+                      Row {result.row}: {result.success ? 'Success' : `Failed - ${result.message}`}
+                      {result.status && ` (${result.status})`}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -199,6 +293,9 @@ export default function Transactions() {
               <code className="text-xs bg-background p-2 rounded block overflow-x-auto">
                 date, type, description, reference, amount, category
               </code>
+              <p className="text-xs text-muted-foreground mt-2">
+                <strong>type</strong>: "payment" or "receipt"
+              </p>
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -274,14 +371,23 @@ export default function Transactions() {
           </div>
         )}
 
-        {/* API Info */}
-        <div className="mt-8 p-4 bg-muted rounded-lg">
-          <h3 className="font-medium text-foreground mb-2">API Integration</h3>
-          <p className="text-sm text-muted-foreground">
-            Bank payments are created via <code className="bg-background px-1 rounded">POST /bank_payments</code> and 
-            receipts via <code className="bg-background px-1 rounded">POST /bank_receipts</code>.
-          </p>
-        </div>
+        {/* API Integration Panel - Only visible in Developer Mode */}
+        {isDeveloperMode && (
+          <div className="mt-8">
+            <ApiIntegrationPanel featureArea="transactions" />
+          </div>
+        )}
+
+        {/* API Info - Always visible when not in dev mode */}
+        {!isDeveloperMode && (
+          <div className="mt-8 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium text-foreground mb-2">API Integration</h3>
+            <p className="text-sm text-muted-foreground">
+              Bank payments are created via <code className="bg-background px-1 rounded">POST /bank_payments</code> and 
+              receipts via <code className="bg-background px-1 rounded">POST /bank_receipts</code>.
+            </p>
+          </div>
+        )}
       </div>
     </MainLayout>
   );
