@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,13 +10,30 @@ import {
   Key, 
   Server, 
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle,
+  FileJson,
+  RefreshCw,
+  Clock,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { configManager } from '@/lib/configManager';
+import { tokenManager } from '@/lib/tokenManager';
 
 export default function Admin() {
   const { credentials, setCredentials } = useApp();
+  const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+  const [isTesting, setIsTesting] = useState<'subscription' | 'tenant' | null>(null);
+  const [tokenStatus, setTokenStatus] = useState<{
+    subscription: { valid: boolean; expiresAt: number | null };
+    tenant: { valid: boolean; expiresAt: number | null };
+  }>({
+    subscription: { valid: false, expiresAt: null },
+    tenant: { valid: false, expiresAt: null },
+  });
   
   const [formData, setFormData] = useState({
     clientId: '',
@@ -28,10 +46,44 @@ export default function Admin() {
   });
 
   useEffect(() => {
+    // Check if config was loaded from file
+    const config = configManager.getConfig();
+    setIsConfigLoaded(configManager.isLoadedFromFile());
+    
+    // Use config values or credentials
     if (credentials) {
       setFormData(credentials);
+    } else if (config.clientId) {
+      setFormData({
+        clientId: config.clientId || '',
+        clientSecret: config.clientSecret || '',
+        subscriptionClientId: config.subscriptionClientId || '',
+        subscriptionClientSecret: config.subscriptionClientSecret || '',
+        productCode: config.productCode || '',
+        platform: config.platform || '',
+        businessTypeCode: config.businessTypeCode || '',
+      });
     }
+
+    // Get token status
+    updateTokenStatus();
   }, [credentials]);
+
+  const updateTokenStatus = () => {
+    const subscriptionMeta = tokenManager.getTokenMetadata('subscription');
+    const tenantMeta = tokenManager.getTokenMetadata('tenant');
+    
+    setTokenStatus({
+      subscription: { 
+        valid: subscriptionMeta?.isValid || false, 
+        expiresAt: subscriptionMeta?.expiresAt || null 
+      },
+      tenant: { 
+        valid: tenantMeta?.isValid || false, 
+        expiresAt: tenantMeta?.expiresAt || null 
+      },
+    });
+  };
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -40,15 +92,91 @@ export default function Admin() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCredentials(formData);
+    
+    // Also save to config manager
+    configManager.setConfig(formData);
+    
     toast({
       title: "Settings saved",
       description: "Your API credentials have been saved successfully.",
     });
   };
 
+  const handleTestConnection = async (type: 'subscription' | 'tenant') => {
+    setIsTesting(type);
+    
+    try {
+      // First save the current credentials
+      configManager.setConfig(formData);
+      
+      // Try to get a token
+      if (type === 'subscription') {
+        await tokenManager.getToken('subscription');
+      } else {
+        await tokenManager.getToken('tenant');
+      }
+      
+      updateTokenStatus();
+      
+      toast({
+        title: "Connection successful",
+        description: `${type === 'subscription' ? 'Subscription' : 'Tenant'} credentials are valid.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Connection failed",
+        description: error.message || `Failed to authenticate with ${type} credentials.`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsTesting(null);
+    }
+  };
+
+  const formatExpiry = (timestamp: number | null) => {
+    if (!timestamp) return 'Not authenticated';
+    const date = new Date(timestamp);
+    const now = Date.now();
+    const diff = timestamp - now;
+    
+    if (diff <= 0) return 'Expired';
+    
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) return `Expires in ${minutes}m`;
+    
+    const hours = Math.floor(minutes / 60);
+    return `Expires in ${hours}h ${minutes % 60}m`;
+  };
+
   return (
     <MainLayout>
       <div className="max-w-3xl animate-fade-in">
+        {/* Local Demo Warning Banner */}
+        <div className="mb-6 p-4 bg-warning/10 border border-warning/30 rounded-lg flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-medium text-foreground">Local Demo Only</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Credentials are stored locally in your browser for this sandbox demo. 
+              This is not suitable for production use.
+            </p>
+          </div>
+        </div>
+
+        {/* Config File Indicator */}
+        {isConfigLoaded && (
+          <div className="mb-6 p-4 bg-primary/10 border border-primary/30 rounded-lg flex items-start gap-3">
+            <FileJson className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-foreground">Config File Detected</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Settings were loaded from <code className="bg-background px-1 rounded">app-config.local.json</code>. 
+                Changes here will override the file settings.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="page-header">
           <h1 className="page-title">Admin Settings</h1>
@@ -58,16 +186,32 @@ export default function Admin() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* OAuth Credentials */}
+          {/* OAuth Credentials (Tenant Services) */}
           <div className="form-section">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Key className="w-5 h-5 text-primary" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Key className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="section-title">Tenant Services Credentials</h2>
+                  <p className="section-description">For bank accounts, transactions, and reports</p>
+                </div>
               </div>
-              <div>
-                <h2 className="section-title">OAuth Credentials</h2>
-                <p className="section-description">Primary API authentication credentials</p>
-              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleTestConnection('tenant')}
+                disabled={isTesting !== null || !formData.clientId || !formData.clientSecret}
+              >
+                {isTesting === 'tenant' ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Test
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -91,18 +235,45 @@ export default function Admin() {
                 />
               </div>
             </div>
+
+            {/* Token Status - Developer Mode Only */}
+            {isDeveloperMode && (
+              <div className="mt-4 p-3 bg-muted rounded-lg flex items-center gap-3 text-sm">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Token Status:</span>
+                <span className={tokenStatus.tenant.valid ? "text-success" : "text-muted-foreground"}>
+                  {formatExpiry(tokenStatus.tenant.expiresAt)}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Subscription Credentials */}
           <div className="form-section">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                <Server className="w-5 h-5 text-accent" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <Server className="w-5 h-5 text-accent-foreground" />
+                </div>
+                <div>
+                  <h2 className="section-title">Subscription Credentials</h2>
+                  <p className="section-description">For tenant creation and metadata</p>
+                </div>
               </div>
-              <div>
-                <h2 className="section-title">Subscription Credentials</h2>
-                <p className="section-description">Subscription API authentication</p>
-              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleTestConnection('subscription')}
+                disabled={isTesting !== null || !formData.subscriptionClientId || !formData.subscriptionClientSecret}
+              >
+                {isTesting === 'subscription' ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Test
+              </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,6 +297,17 @@ export default function Admin() {
                 />
               </div>
             </div>
+
+            {/* Token Status - Developer Mode Only */}
+            {isDeveloperMode && (
+              <div className="mt-4 p-3 bg-muted rounded-lg flex items-center gap-3 text-sm">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Token Status:</span>
+                <span className={tokenStatus.subscription.valid ? "text-success" : "text-muted-foreground"}>
+                  {formatExpiry(tokenStatus.subscription.expiresAt)}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Additional Settings */}
@@ -136,7 +318,7 @@ export default function Admin() {
                 <p className="section-description">Values from the subscriptions endpoint</p>
               </div>
               <a 
-                href="https://developer.columbus.sage.com/docs/services/sage-ses-subscriptions-api/operations/Tenants_GetSubscriptionAsync" 
+                href="https://developer.sage.com/embedded-services/apis/embedded-services/latest/openapi" 
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-primary hover:underline flex items-center gap-1"
@@ -193,13 +375,20 @@ export default function Admin() {
         </form>
 
         {/* Info Box */}
-        <div className="mt-8 p-4 bg-muted rounded-lg">
-          <h3 className="font-medium text-foreground mb-2">About API Credentials</h3>
-          <p className="text-sm text-muted-foreground">
-            These credentials are stored locally in your browser and used to authenticate 
-            with the Sage Embedded Services sandbox API. In a production environment, 
-            these would be securely stored on the server.
-          </p>
+        <div className="mt-8 p-4 bg-muted rounded-lg space-y-3">
+          <h3 className="font-medium text-foreground">Configuration Options</h3>
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p>
+              <strong>Option 1 (File-based):</strong> Create <code className="bg-background px-1 rounded">app-config.local.json</code> in 
+              the public folder based on <code className="bg-background px-1 rounded">app-config.example.json</code>.
+            </p>
+            <p>
+              <strong>Option 2 (UI-based):</strong> Enter credentials above. They will be saved to localStorage.
+            </p>
+            <p className="text-xs">
+              File-based configuration takes precedence unless overridden here.
+            </p>
+          </div>
         </div>
       </div>
     </MainLayout>

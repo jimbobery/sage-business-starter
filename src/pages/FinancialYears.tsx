@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
+import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +10,8 @@ import {
   Calendar,
   AlertCircle,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -20,11 +22,15 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
+import { financialService } from '@/services/financialService';
 
 export default function FinancialYears() {
-  const { financialYears, activeTenantId, addFinancialYear, getActiveTenant } = useApp();
+  const { financialYears, activeTenantId, addFinancialYear, getActiveTenant, credentials } = useApp();
+  const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     startDate: '',
@@ -34,23 +40,51 @@ export default function FinancialYears() {
   const activeTenant = getActiveTenant();
   const tenantYears = financialYears.filter(y => y.tenantId === activeTenantId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenantId) return;
     
-    addFinancialYear({
-      tenantId: activeTenantId,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      status: 'open',
-    });
+    if (!credentials?.clientId || !credentials?.clientSecret) {
+      toast({
+        title: "Configuration required",
+        description: "Please configure your API credentials in Admin Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
     
-    setFormData({ startDate: '', endDate: '' });
-    setIsDialogOpen(false);
-    toast({
-      title: "Financial year created",
-      description: "The financial year has been set up successfully.",
-    });
+    try {
+      // Call real API
+      await financialService.createFinancialYear(activeTenantId, {
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+      });
+      
+      // Also add to local state for UI
+      addFinancialYear({
+        tenantId: activeTenantId,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        status: 'open',
+      });
+      
+      setFormData({ startDate: '', endDate: '' });
+      setIsDialogOpen(false);
+      toast({
+        title: "Financial year created",
+        description: "The financial year has been set up successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to create financial year",
+        description: error.message || "An error occurred while creating the financial year.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Auto-calculate end date (1 year from start)
@@ -121,6 +155,7 @@ export default function FinancialYears() {
                     value={formData.startDate}
                     onChange={(e) => handleStartDateChange(e.target.value)}
                     required
+                    disabled={isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -131,16 +166,18 @@ export default function FinancialYears() {
                     value={formData.endDate}
                     onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
                     required
+                    disabled={isLoading}
                   />
                   <p className="text-xs text-muted-foreground">
                     Auto-calculated as 1 year from start date
                   </p>
                 </div>
                 <div className="flex justify-end gap-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isLoading}>
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Create Year
                   </Button>
                 </div>
@@ -209,14 +246,23 @@ export default function FinancialYears() {
           </div>
         )}
 
-        {/* API Info */}
-        <div className="mt-8 p-4 bg-muted rounded-lg">
-          <h3 className="font-medium text-foreground mb-2">API Integration</h3>
-          <p className="text-sm text-muted-foreground">
-            Financial years are created via <code className="bg-background px-1 rounded">POST /financial_settings</code>.
-            The year defines the accounting period for reporting.
-          </p>
-        </div>
+        {/* API Integration Panel - Only visible in Developer Mode */}
+        {isDeveloperMode && (
+          <div className="mt-8">
+            <ApiIntegrationPanel featureArea="financial-years" />
+          </div>
+        )}
+
+        {/* API Info - Always visible when not in dev mode */}
+        {!isDeveloperMode && (
+          <div className="mt-8 p-4 bg-muted rounded-lg">
+            <h3 className="font-medium text-foreground mb-2">API Integration</h3>
+            <p className="text-sm text-muted-foreground">
+              Financial years are created via <code className="bg-background px-1 rounded">POST /financial_settings</code>.
+              The year defines the accounting period for reporting.
+            </p>
+          </div>
+        )}
       </div>
     </MainLayout>
   );
