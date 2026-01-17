@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient';
-import { BankAccount, SageBankAccountRequest, SageOpeningBalanceRequest, OpeningBalance } from '@/types/sage';
+import { BankAccount, SageBankAccountRequest, SageOpeningBalanceRequest, OpeningBalance, Credentials } from '@/types/sage';
 
 const TENANT_API_BASE = 'https://api.sandbox.sbc.sage.com/v1';
 
@@ -26,7 +26,8 @@ export const bankService = {
    */
   async createBankAccount(
     tenantId: string,
-    data: SageBankAccountRequest
+    data: SageBankAccountRequest,
+    credentials: Credentials
   ): Promise<CreateBankAccountResponse> {
     const response = await apiClient.post<CreateBankAccountResponse>(
       `${TENANT_API_BASE}/bank_accounts`,
@@ -34,7 +35,8 @@ export const bankService = {
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
-        tenantId 
+        tenantId,
+        credentials
       }
     );
 
@@ -44,13 +46,14 @@ export const bankService = {
   /**
    * Get all bank accounts for a tenant
    */
-  async getBankAccounts(tenantId: string): Promise<BankAccount[]> {
+  async getBankAccounts(tenantId: string, credentials: Credentials): Promise<BankAccount[]> {
     const response = await apiClient.get<{ data: BankAccount[] }>(
       `${TENANT_API_BASE}/bank_accounts`,
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
-        tenantId 
+        tenantId,
+        credentials
       }
     );
 
@@ -62,7 +65,8 @@ export const bankService = {
    */
   async createOpeningBalance(
     tenantId: string,
-    data: SageOpeningBalanceRequest
+    data: SageOpeningBalanceRequest,
+    credentials: Credentials
   ): Promise<CreateOpeningBalanceResponse> {
     const response = await apiClient.post<CreateOpeningBalanceResponse>(
       `${TENANT_API_BASE}/bank_opening_balances`,
@@ -70,7 +74,8 @@ export const bankService = {
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
-        tenantId 
+        tenantId,
+        credentials
       }
     );
 
@@ -80,13 +85,14 @@ export const bankService = {
   /**
    * Get opening balances for a tenant
    */
-  async getOpeningBalances(tenantId: string): Promise<OpeningBalance[]> {
+  async getOpeningBalances(tenantId: string, credentials: Credentials): Promise<OpeningBalance[]> {
     const response = await apiClient.get<{ data: OpeningBalance[] }>(
       `${TENANT_API_BASE}/bank_opening_balances`,
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
-        tenantId 
+        tenantId,
+        credentials
       }
     );
 

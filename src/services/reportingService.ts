@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient';
-import { ProfitLossReport } from '@/types/sage';
+import { Credentials } from '@/types/sage';
 
 const TENANT_API_BASE = 'https://api.sandbox.sbc.sage.com/v1';
 
@@ -20,7 +20,8 @@ export const reportingService = {
    */
   async getProfitAndLoss(
     tenantId: string,
-    params: { startDate: string; endDate: string }
+    params: { startDate: string; endDate: string },
+    credentials: Credentials
   ): Promise<ProfitLossApiResponse> {
     const queryParams = new URLSearchParams({
       from_date: params.startDate,
@@ -32,7 +33,8 @@ export const reportingService = {
       { 
         tokenType: 'tenant', 
         featureArea: 'reports',
-        tenantId 
+        tenantId,
+        credentials
       }
     );
 
@@ -57,7 +59,8 @@ export const reportingService = {
    */
   async getBalanceSheet(
     tenantId: string,
-    params: { date: string }
+    params: { date: string },
+    credentials: Credentials
   ): Promise<any> {
     const queryParams = new URLSearchParams({
       as_of_date: params.date,
@@ -68,7 +71,8 @@ export const reportingService = {
       { 
         tokenType: 'tenant', 
         featureArea: 'reports',
-        tenantId 
+        tenantId,
+        credentials
       }
     );
 

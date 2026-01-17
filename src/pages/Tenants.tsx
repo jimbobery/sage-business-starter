@@ -51,7 +51,7 @@ export default function Tenants() {
     
     try {
       // Call real API
-      const response = await subscriptionService.createTenant(formData);
+      const response = await subscriptionService.createTenant(formData, credentials);
       
       // Also add to local state for UI
       const tenant = addTenant({

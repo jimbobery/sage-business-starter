@@ -71,7 +71,7 @@ export default function BankAccounts() {
     
     try {
       // Call real API
-      await bankService.createBankAccount(activeTenantId, accountForm);
+      await bankService.createBankAccount(activeTenantId, accountForm, credentials);
       
       // Also add to local state for UI
       addBankAccount({
@@ -118,7 +118,7 @@ export default function BankAccounts() {
         bankAccountId: selectedAccountId,
         amount: parseFloat(balanceForm.amount),
         date: balanceForm.date,
-      });
+      }, credentials);
       
       // Also update local state
       addOpeningBalance({

@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/apiClient';
-import { BankTransaction, SageBankPaymentRequest, SageBankReceiptRequest, CsvUploadResult } from '@/types/sage';
+import { BankTransaction, SageBankPaymentRequest, SageBankReceiptRequest, CsvUploadResult, Credentials } from '@/types/sage';
 
 const TENANT_API_BASE = 'https://api.sandbox.sbc.sage.com/v1';
 
@@ -14,59 +14,41 @@ export interface CreateTransactionResponse {
 }
 
 export const transactionService = {
-  /**
-   * Create a bank payment
-   */
   async createPayment(
     tenantId: string,
-    data: SageBankPaymentRequest
+    data: SageBankPaymentRequest,
+    credentials: Credentials
   ): Promise<CreateTransactionResponse> {
     const response = await apiClient.post<CreateTransactionResponse>(
       `${TENANT_API_BASE}/bank_payments`,
       data,
-      { 
-        tokenType: 'tenant', 
-        featureArea: 'transactions',
-        tenantId 
-      }
+      { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
     );
-
     return response;
   },
 
-  /**
-   * Create a bank receipt
-   */
   async createReceipt(
     tenantId: string,
-    data: SageBankReceiptRequest
+    data: SageBankReceiptRequest,
+    credentials: Credentials
   ): Promise<CreateTransactionResponse> {
     const response = await apiClient.post<CreateTransactionResponse>(
       `${TENANT_API_BASE}/bank_receipts`,
       data,
-      { 
-        tokenType: 'tenant', 
-        featureArea: 'transactions',
-        tenantId 
-      }
+      { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
     );
-
     return response;
   },
 
-  /**
-   * Get all transactions for a tenant
-   */
-  async getTransactions(tenantId: string): Promise<BankTransaction[]> {
-    // Fetch both payments and receipts
+  async getTransactions(tenantId: string, credentials: Credentials): Promise<BankTransaction[]> {
     const [payments, receipts] = await Promise.all([
       apiClient.get<{ data: BankTransaction[] }>(
         `${TENANT_API_BASE}/bank_payments`,
-        { tokenType: 'tenant', featureArea: 'transactions', tenantId }
+        { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
       ),
       apiClient.get<{ data: BankTransaction[] }>(
         `${TENANT_API_BASE}/bank_receipts`,
-        { tokenType: 'tenant', featureArea: 'transactions', tenantId }
+        { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
       ),
     ]);
 
@@ -80,10 +62,6 @@ export const transactionService = {
     );
   },
 
-  /**
-   * Upload transactions from CSV data
-   * Returns results for each row with success/failure status
-   */
   async uploadFromCsv(
     tenantId: string,
     bankAccountId: string,
@@ -94,7 +72,8 @@ export const transactionService = {
       reference: string;
       amount: number;
       category?: string;
-    }>
+    }>,
+    credentials: Credentials
   ): Promise<CsvUploadResult[]> {
     const results: CsvUploadResult[] = [];
 
@@ -112,9 +91,9 @@ export const transactionService = {
 
         let response: CreateTransactionResponse;
         if (tx.type === 'payment') {
-          response = await this.createPayment(tenantId, requestData);
+          response = await this.createPayment(tenantId, requestData, credentials);
         } else {
-          response = await this.createReceipt(tenantId, requestData);
+          response = await this.createReceipt(tenantId, requestData, credentials);
         }
 
         results.push({

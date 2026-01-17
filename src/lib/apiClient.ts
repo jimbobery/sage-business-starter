@@ -400,3 +400,39 @@ export function getLatestCall(featureArea: FeatureArea): Omit<ApiLogEntry, 'id'>
 export function clearLatestCall(featureArea: FeatureArea): void {
   latestCalls[featureArea] = null;
 }
+
+// Export as apiClient object for convenient imports
+export const apiClient = {
+  request: apiRequest,
+  getLatestCall,
+  clearLatestCall,
+  
+  // Convenience methods that throw on error
+  async get<T>(url: string, options: Omit<ApiRequestOptions, 'method' | 'endpoint'> & { credentials: import('@/types/sage').Credentials }): Promise<T> {
+    const { credentials, ...rest } = options;
+    const response = await apiRequest<T>({ ...rest, method: 'GET', endpoint: url }, credentials);
+    if (!response.success) throw new Error(response.error || `Request failed: ${response.status}`);
+    return response.data!;
+  },
+  
+  async post<T>(url: string, body: unknown, options: Omit<ApiRequestOptions, 'method' | 'endpoint' | 'body'> & { credentials: import('@/types/sage').Credentials }): Promise<T> {
+    const { credentials, ...rest } = options;
+    const response = await apiRequest<T>({ ...rest, method: 'POST', endpoint: url, body }, credentials);
+    if (!response.success) throw new Error(response.error || `Request failed: ${response.status}`);
+    return response.data!;
+  },
+  
+  async put<T>(url: string, body: unknown, options: Omit<ApiRequestOptions, 'method' | 'endpoint' | 'body'> & { credentials: import('@/types/sage').Credentials }): Promise<T> {
+    const { credentials, ...rest } = options;
+    const response = await apiRequest<T>({ ...rest, method: 'PUT', endpoint: url, body }, credentials);
+    if (!response.success) throw new Error(response.error || `Request failed: ${response.status}`);
+    return response.data!;
+  },
+  
+  async delete<T>(url: string, options: Omit<ApiRequestOptions, 'method' | 'endpoint'> & { credentials: import('@/types/sage').Credentials }): Promise<T> {
+    const { credentials, ...rest } = options;
+    const response = await apiRequest<T>({ ...rest, method: 'DELETE', endpoint: url }, credentials);
+    if (!response.success) throw new Error(response.error || `Request failed: ${response.status}`);
+    return response.data!;
+  },
+};
