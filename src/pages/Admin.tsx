@@ -18,8 +18,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { configManager } from '@/lib/configManager';
-import { tokenManager } from '@/lib/tokenManager';
+import { getConfig, saveConfig } from '@/lib/configManager';
+import { getTokenMetadata, getToken, clearToken } from '@/lib/tokenManager';
 
 export default function Admin() {
   const { credentials, setCredentials } = useApp();
@@ -46,32 +46,34 @@ export default function Admin() {
   });
 
   useEffect(() => {
-    // Check if config was loaded from file
-    const config = configManager.getConfig();
-    setIsConfigLoaded(configManager.isLoadedFromFile());
-    
-    // Use config values or credentials
-    if (credentials) {
-      setFormData(credentials);
-    } else if (config.clientId) {
-      setFormData({
-        clientId: config.clientId || '',
-        clientSecret: config.clientSecret || '',
-        subscriptionClientId: config.subscriptionClientId || '',
-        subscriptionClientSecret: config.subscriptionClientSecret || '',
-        productCode: config.productCode || '',
-        platform: config.platform || '',
-        businessTypeCode: config.businessTypeCode || '',
-      });
-    }
+    // Load config asynchronously
+    const loadConfig = async () => {
+      const config = await getConfig();
+      setIsConfigLoaded(config.fileConfigLoaded);
+      
+      // Use credentials from context or loaded config
+      if (credentials) {
+        setFormData(credentials);
+      } else if (config.credentials) {
+        setFormData({
+          clientId: config.credentials.clientId || '',
+          clientSecret: config.credentials.clientSecret || '',
+          subscriptionClientId: config.credentials.subscriptionClientId || '',
+          subscriptionClientSecret: config.credentials.subscriptionClientSecret || '',
+          productCode: config.credentials.productCode || '',
+          platform: config.credentials.platform || '',
+          businessTypeCode: config.credentials.businessTypeCode || '',
+        });
+      }
+    };
 
-    // Get token status
+    loadConfig();
     updateTokenStatus();
   }, [credentials]);
 
   const updateTokenStatus = () => {
-    const subscriptionMeta = tokenManager.getTokenMetadata('subscription');
-    const tenantMeta = tokenManager.getTokenMetadata('tenant');
+    const subscriptionMeta = getTokenMetadata('subscription');
+    const tenantMeta = getTokenMetadata('tenant');
     
     setTokenStatus({
       subscription: { 
@@ -94,7 +96,7 @@ export default function Admin() {
     setCredentials(formData);
     
     // Also save to config manager
-    configManager.setConfig(formData);
+    saveConfig(formData);
     
     toast({
       title: "Settings saved",
@@ -107,21 +109,30 @@ export default function Admin() {
     
     try {
       // First save the current credentials
-      configManager.setConfig(formData);
+      saveConfig(formData);
+      
+      // Clear existing token to force a fresh fetch
+      clearToken(type);
       
       // Try to get a token
-      if (type === 'subscription') {
-        await tokenManager.getToken('subscription');
+      const clientId = type === 'subscription' ? formData.subscriptionClientId : formData.clientId;
+      const clientSecret = type === 'subscription' ? formData.subscriptionClientSecret : formData.clientSecret;
+      
+      const token = await getToken(type, clientId, clientSecret);
+      
+      if (token) {
+        updateTokenStatus();
+        toast({
+          title: "Connection successful",
+          description: `${type === 'subscription' ? 'Subscription' : 'Tenant'} credentials are valid.`,
+        });
       } else {
-        await tokenManager.getToken('tenant');
+        toast({
+          title: "Connection failed",
+          description: `Failed to authenticate with ${type} credentials.`,
+          variant: "destructive",
+        });
       }
-      
-      updateTokenStatus();
-      
-      toast({
-        title: "Connection successful",
-        description: `${type === 'subscription' ? 'Subscription' : 'Tenant'} credentials are valid.`,
-      });
     } catch (error: any) {
       toast({
         title: "Connection failed",

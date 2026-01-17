@@ -151,3 +151,15 @@ export function getSubscriptionApiUrl(): string {
 export function getTokenUrl(): string {
   return 'https://oauth.sage.com/oauth/token';
 }
+
+// Export as object for convenient imports
+export const configManager = {
+  getConfig,
+  getCachedConfig,
+  saveConfig,
+  clearConfig,
+  hasValidCredentials,
+  getApiBaseUrl,
+  getSubscriptionApiUrl,
+  getTokenUrl,
+};

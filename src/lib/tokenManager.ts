@@ -203,3 +203,12 @@ export async function forceRefreshToken(
   const token = await getToken(type, clientId, clientSecret, audience);
   return token !== null;
 }
+
+// Export as object for convenient imports
+export const tokenManager = {
+  getToken,
+  getTokenMetadata,
+  clearToken,
+  clearAllTokens,
+  forceRefreshToken,
+};

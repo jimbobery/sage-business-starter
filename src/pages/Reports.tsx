@@ -103,7 +103,7 @@ export default function Reports() {
         const response = await reportingService.getProfitAndLoss(activeTenantId, {
           startDate: year.startDate,
           endDate: year.endDate,
-        });
+        }, credentials);
         
         setApiReport(response);
         setRawJson(JSON.stringify(response.rawData, null, 2));
