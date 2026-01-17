@@ -121,7 +121,8 @@ export default function Transactions() {
         const results = await transactionService.uploadFromCsv(
           activeTenantId,
           selectedAccountId,
-          parsedTransactions
+          parsedTransactions,
+          credentials
         );
 
         setUploadResults(results);

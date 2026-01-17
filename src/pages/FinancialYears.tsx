@@ -60,7 +60,7 @@ export default function FinancialYears() {
       await financialService.createFinancialYear(activeTenantId, {
         startDate: formData.startDate,
         endDate: formData.endDate,
-      });
+      }, credentials);
       
       // Also add to local state for UI
       addFinancialYear({
