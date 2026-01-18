@@ -149,7 +149,7 @@ export function getSubscriptionApiUrl(): string {
  * Gets the OAuth token URL
  */
 export function getTokenUrl(): string {
-  return 'https://oauth.sage.com/oauth/token';
+  return 'https://id-shadow.sage.com/oauth/token';
 }
 
 // Export as object for convenient imports
