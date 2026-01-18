@@ -56,6 +56,9 @@ const refreshPromises: Record<TokenType, Promise<TokenData | null> | null> = {
 // Refresh buffer - refresh 60 seconds before expiry
 const REFRESH_BUFFER_MS = 60 * 1000;
 
+// Default audience for all OAuth token requests
+const DEFAULT_AUDIENCE = 'SBCDS/Global-External';
+
 // Request ID counter for unique IDs
 let requestIdCounter = 0;
 
@@ -82,9 +85,9 @@ async function fetchToken(
     client_secret: clientSecret,
   });
   
-  if (audience) {
-    bodyParams.append('audience', audience);
-  }
+  // Always include the audience parameter (use provided or default)
+  const effectiveAudience = audience || DEFAULT_AUDIENCE;
+  bodyParams.append('audience', effectiveAudience);
 
   // Log entry template
   const createLogEntry = (
