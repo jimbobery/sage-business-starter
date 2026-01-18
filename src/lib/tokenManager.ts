@@ -9,9 +9,12 @@
  * - In-memory only storage (never persisted to disk)
  * - Auto-refresh before expiry (60s buffer)
  * - Exposes metadata (audience, scope, expiry) for Developer Mode
+ * - Logs all token requests to Network Console
  */
 
 import { getTokenUrl } from './configManager';
+import { logApiCall } from './logger';
+import { maskStringSecrets } from './maskSecrets';
 
 export type TokenType = 'subscription' | 'tenant';
 
@@ -53,25 +56,58 @@ const refreshPromises: Record<TokenType, Promise<TokenData | null> | null> = {
 // Refresh buffer - refresh 60 seconds before expiry
 const REFRESH_BUFFER_MS = 60 * 1000;
 
+// Request ID counter for unique IDs
+let requestIdCounter = 0;
+
+function generateRequestId(): string {
+  return `oauth-${Date.now()}-${++requestIdCounter}`;
+}
+
 /**
  * Fetches a new token using client credentials flow
  */
 async function fetchToken(
   clientId: string,
   clientSecret: string,
-  audience?: string
+  audience?: string,
+  tokenType?: TokenType
 ): Promise<TokenData | null> {
   const tokenUrl = getTokenUrl();
+  const requestId = generateRequestId();
+  const startTime = Date.now();
   
-  const body = new URLSearchParams({
+  const bodyParams = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: clientId,
     client_secret: clientSecret,
   });
   
   if (audience) {
-    body.append('audience', audience);
+    bodyParams.append('audience', audience);
   }
+
+  // Log entry template
+  const createLogEntry = (
+    status: number,
+    statusText: string,
+    responseBody: string | null,
+    error?: string
+  ) => ({
+    requestId,
+    timestamp: new Date(startTime).toISOString(),
+    method: 'POST',
+    url: tokenUrl,
+    status,
+    statusText,
+    durationMs: Date.now() - startTime,
+    requestHeaders: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    requestBody: maskStringSecrets(`grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}${audience ? `&audience=${audience}` : ''}`),
+    responseHeaders: {},
+    responseBody,
+    tenantId: null,
+    featureArea: `OAuth (${tokenType || 'unknown'})`,
+    error,
+  });
 
   try {
     const response = await fetch(tokenUrl, {
@@ -79,16 +115,38 @@ async function fetchToken(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: body.toString(),
+      body: bodyParams.toString(),
     });
 
+    const responseText = await response.text();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Token fetch failed:', response.status, errorText);
+      console.error('Token fetch failed:', response.status, responseText);
+      
+      // Log failed token request
+      await logApiCall(createLogEntry(
+        response.status,
+        response.statusText || 'Error',
+        responseText,
+        `Token fetch failed: ${response.status}`
+      ));
+      
       return null;
     }
 
-    const data = await response.json();
+    const data = JSON.parse(responseText);
+    
+    // Log successful token request (mask the access_token in response)
+    const maskedResponse = JSON.stringify({
+      ...data,
+      access_token: data.access_token ? '[REDACTED]' : undefined,
+    });
+    
+    await logApiCall(createLogEntry(
+      response.status,
+      response.statusText || 'OK',
+      maskedResponse
+    ));
     
     return {
       accessToken: data.access_token,
@@ -99,6 +157,15 @@ async function fetchToken(
     };
   } catch (error) {
     console.error('Token fetch error:', error);
+    
+    // Log network/CORS error
+    await logApiCall(createLogEntry(
+      0,
+      'Network Error',
+      null,
+      error instanceof Error ? error.message : 'Unknown error (likely CORS)'
+    ));
+    
     return null;
   }
 }
@@ -132,7 +199,7 @@ export async function getToken(
   }
 
   // Start a new refresh
-  refreshPromises[type] = fetchToken(clientId, clientSecret, audience);
+  refreshPromises[type] = fetchToken(clientId, clientSecret, audience, type);
   
   try {
     const newToken = await refreshPromises[type];
