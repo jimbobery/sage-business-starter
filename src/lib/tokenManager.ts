@@ -79,15 +79,14 @@ async function fetchToken(
   const requestId = generateRequestId();
   const startTime = Date.now();
   
-  const bodyParams = new URLSearchParams({
+  // Build JSON body with audience first as per API requirements
+  const effectiveAudience = audience || DEFAULT_AUDIENCE;
+  const requestBody = {
+    audience: effectiveAudience,
     grant_type: 'client_credentials',
     client_id: clientId,
     client_secret: clientSecret,
-  });
-  
-  // Always include the audience parameter (use provided or default)
-  const effectiveAudience = audience || DEFAULT_AUDIENCE;
-  bodyParams.append('audience', effectiveAudience);
+  };
 
   // Log entry template
   const createLogEntry = (
@@ -103,8 +102,8 @@ async function fetchToken(
     status,
     statusText,
     durationMs: Date.now() - startTime,
-    requestHeaders: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    requestBody: maskStringSecrets(`grant_type=client_credentials&client_id=${clientId}&client_secret=${clientSecret}${audience ? `&audience=${audience}` : ''}`),
+    requestHeaders: { 'Content-Type': 'application/json' },
+    requestBody: maskStringSecrets(JSON.stringify(requestBody)),
     responseHeaders: {},
     responseBody,
     tenantId: null,
@@ -116,9 +115,9 @@ async function fetchToken(
     const response = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: bodyParams.toString(),
+      body: JSON.stringify(requestBody),
     });
 
     const responseText = await response.text();
