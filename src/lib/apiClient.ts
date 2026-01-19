@@ -27,6 +27,8 @@ export interface ApiRequestOptions {
   tenantId?: string | null;
   skipAuth?: boolean;
   retries?: number;
+  /** Idempotency key for POST/PUT/PATCH requests (added as X-Idempotency-Key header) */
+  idempotencyKey?: string;
 }
 
 export interface ApiResponse<T = unknown> {
@@ -138,6 +140,11 @@ export async function apiRequest<T = unknown>(
     'Accept': 'application/json',
     ...options.headers,
   };
+  
+  // Add idempotency key header for mutating requests (non-subscription endpoints)
+  if (options.idempotencyKey && ['POST', 'PUT', 'PATCH'].includes(options.method)) {
+    requestHeaders['X-Idempotency-Key'] = options.idempotencyKey;
+  }
   
   // Get auth token if needed
   if (!options.skipAuth) {

@@ -1,8 +1,19 @@
 import { apiClient } from '@/lib/apiClient';
-import { Tenant, SageTenantRequest, Credentials } from '@/types/sage';
+import { Tenant, Credentials } from '@/types/sage';
 import { getConfig } from '@/lib/configManager';
+import { generateIdempotencyKey } from '@/lib/idempotency';
 
 const SUBSCRIPTIONS_BASE_URL = 'https://api.sandbox.sbc.sage.com/slcsadapter/v2/subscriptions';
+
+export interface CreateTenantRequest {
+  ProductCode: string;
+  ReferenceId: string;
+  Business: {
+    Name: string;
+    BusinessTypeCode: string;
+  };
+  Platform: string;
+}
 
 export interface CreateTenantResponse {
   id: string;
@@ -20,16 +31,18 @@ export const subscriptionService = {
     const config = await getConfig();
     const creds = config.credentials || credentials;
     
-    const requestBody: SageTenantRequest = {
-      name: data.name,
-      businessName: data.businessName,
-      productCode: creds.productCode || 'SAGE_ONE',
-      platform: creds.platform || 'UK',
-      businessTypeCode: creds.businessTypeCode || 'SOLE_TRADER',
+    const requestBody: CreateTenantRequest = {
+      ProductCode: creds.productCode || 'SAGE_ONE',
+      ReferenceId: generateIdempotencyKey(),
+      Business: {
+        Name: data.businessName,
+        BusinessTypeCode: creds.businessTypeCode || 'SOLE_TRADER',
+      },
+      Platform: creds.platform || 'UK',
     };
 
     const response = await apiClient.post<CreateTenantResponse>(
-      `${SUBSCRIPTIONS_BASE_URL}/tenants`,
+      SUBSCRIPTIONS_BASE_URL,
       requestBody,
       { tokenType: 'subscription', featureArea: 'tenants', credentials }
     );
@@ -42,7 +55,7 @@ export const subscriptionService = {
    */
   async getTenants(credentials: Credentials): Promise<Tenant[]> {
     const response = await apiClient.get<{ data: Tenant[] }>(
-      `${SUBSCRIPTIONS_BASE_URL}/tenants`,
+      SUBSCRIPTIONS_BASE_URL,
       { tokenType: 'subscription', featureArea: 'tenants', credentials }
     );
 
