@@ -21,15 +21,53 @@ A demonstration web application showcasing Sage Embedded Services API capabiliti
 ### Installation
 
 ```bash
+# Clone the repository (if applicable)
+# git clone <repository-url>
+
 # Install dependencies
 npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
 ```
+
+### Running Locally
+
+The application includes a built-in Vite proxy to handle CORS when making requests to the Sage API. This allows the app to run entirely in the browser without a separate backend.
+
+```bash
+# Start development server with proxy enabled
+npm run dev
+```
+
+This starts the app on `http://localhost:8080` with automatic proxying:
+
+| Local Proxy Path | Target API |
+|------------------|------------|
+| `/api/oauth/token` | `https://id-shadow.sage.com/oauth/token` |
+| `/api/sage-core/*` | `https://api.sandbox.sbc.sage.com/*` |
+| `/api/sage-subscriptions/*` | `https://api.sandbox.sbc.sage.com/slcsadapter/v2/*` |
+
+The proxy runs only during development and transparently forwards requests to the Sage sandbox APIs.
+
+### How the CORS Proxy Works
+
+Browser security (CORS) blocks direct requests from a web page to external APIs that don't include the proper headers. The Sage OAuth and API endpoints don't support CORS for browser requests.
+
+The Vite development server acts as a proxy:
+1. Your browser makes requests to `localhost:8080/api/...`
+2. Vite intercepts these requests and forwards them to the real Sage API
+3. Vite returns the response to your browser
+
+This is configured in `vite.config.ts` and requires no additional setup.
+
+### Build for Production
+
+```bash
+npm run build
+npm run preview  # To test the production build locally
+```
+
+> **⚠️ Production Deployment:** The Vite proxy only works in development. For production deployments, you will need:
+> - A backend proxy (Node.js, serverless function, etc.) to forward API requests
+> - Or deploy behind a reverse proxy (nginx, Cloudflare Workers, etc.) that adds CORS headers
 
 ### Demo Login
 
@@ -37,11 +75,29 @@ npm run build
 
 ## Configuration
 
-### Admin Settings
+### Option 1: Configuration File (Recommended for Development)
 
-Navigate to **Admin Settings** to configure your Sage API credentials:
+Create a file `public/app-config.local.json` with your Sage API credentials:
 
-1. **OAuth Credentials**
+```json
+{
+  "clientId": "your-tenant-client-id",
+  "clientSecret": "your-tenant-client-secret",
+  "subscriptionClientId": "your-subscription-client-id",
+  "subscriptionClientSecret": "your-subscription-client-secret",
+  "productCode": "SAGE_ONE",
+  "platform": "UK",
+  "businessTypeCode": "SOLE_TRADER"
+}
+```
+
+> **Note:** This file is gitignored and will not be committed to version control.
+
+### Option 2: Admin Settings UI
+
+Navigate to **Admin Settings** in the app to configure credentials at runtime:
+
+1. **Tenant Services Credentials**
    - Client ID
    - Client Secret
 
@@ -53,6 +109,8 @@ Navigate to **Admin Settings** to configure your Sage API credentials:
    - Product Code (e.g., `SAGE_ONE`)
    - Platform (e.g., `UK`)
    - Business Type Code (e.g., `SOLE_TRADER`)
+
+Credentials entered in the Admin UI are stored in localStorage.
 
 ### Tenant Selection
 

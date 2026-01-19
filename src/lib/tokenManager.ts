@@ -12,7 +12,7 @@
  * - Logs all token requests to Network Console
  */
 
-import { getTokenUrl } from './configManager';
+import { getTokenUrl, getOriginalTokenUrl } from './configManager';
 import { logApiCall } from './logger';
 import { maskStringSecrets } from './maskSecrets';
 
@@ -75,7 +75,8 @@ async function fetchToken(
   audience?: string,
   tokenType?: TokenType
 ): Promise<TokenData | null> {
-  const tokenUrl = getTokenUrl();
+  const tokenUrl = getTokenUrl(); // Uses proxy in dev, direct URL in prod
+  const originalTokenUrl = getOriginalTokenUrl(); // For logging - always shows the real Sage URL
   const requestId = generateRequestId();
   const startTime = Date.now();
   
@@ -98,7 +99,7 @@ async function fetchToken(
     requestId,
     timestamp: new Date(startTime).toISOString(),
     method: 'POST',
-    url: tokenUrl,
+    url: originalTokenUrl, // Log the actual Sage URL, not the proxy path
     status,
     statusText,
     durationMs: Date.now() - startTime,
