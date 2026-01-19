@@ -12,7 +12,7 @@
 
 import { getToken, TokenType } from './tokenManager';
 import { logApiCall, ApiLogEntry } from './logger';
-import { getApiBaseUrl, getSubscriptionApiUrl } from './configManager';
+import { getApiBaseUrl, getSubscriptionApiUrl, getOriginalApiBaseUrl, getOriginalSubscriptionApiUrl } from './configManager';
 import { Credentials } from '@/types/sage';
 
 export type FeatureArea = 'tenants' | 'bank-accounts' | 'financial-years' | 'transactions' | 'reports' | 'auth' | 'other';
@@ -89,10 +89,17 @@ function extractResponseHeaders(headers: Headers): Record<string, string> {
 }
 
 /**
- * Gets the base URL for a token type
+ * Gets the base URL for a token type (may be proxied in dev)
  */
 function getBaseUrl(tokenType: TokenType): string {
   return tokenType === 'subscription' ? getSubscriptionApiUrl() : getApiBaseUrl();
+}
+
+/**
+ * Gets the original (non-proxied) base URL for logging purposes
+ */
+function getOriginalBaseUrl(tokenType: TokenType): string {
+  return tokenType === 'subscription' ? getOriginalSubscriptionApiUrl() : getOriginalApiBaseUrl();
 }
 
 /**
@@ -113,11 +120,17 @@ export async function apiRequest<T = unknown>(
   const startTime = Date.now();
   const maxRetries = options.retries ?? DEFAULT_MAX_RETRIES;
   
-  // Build URL
+  // Build URL (may use proxy path in dev)
   const baseUrl = getBaseUrl(options.tokenType);
   const url = options.endpoint.startsWith('http') 
     ? options.endpoint 
     : `${baseUrl}${options.endpoint}`;
+  
+  // Build original URL for logging (always show actual Sage endpoint)
+  const originalBaseUrl = getOriginalBaseUrl(options.tokenType);
+  const logUrl = options.endpoint.startsWith('http') 
+    ? options.endpoint 
+    : `${originalBaseUrl}${options.endpoint}`;
   
   // Prepare request headers
   const requestHeaders: Record<string, string> = {
@@ -142,7 +155,7 @@ export async function apiRequest<T = unknown>(
         const logEntry = createLogEntry({
           requestId,
           method: options.method,
-          url,
+          url: logUrl,
           requestHeaders,
           requestBody: options.body ? JSON.stringify(options.body) : null,
           status: 0,
@@ -176,7 +189,7 @@ export async function apiRequest<T = unknown>(
       const logEntry = createLogEntry({
         requestId,
         method: options.method,
-        url,
+        url: logUrl,
         requestHeaders,
         requestBody: options.body ? JSON.stringify(options.body) : null,
         status: 0,
@@ -236,7 +249,7 @@ export async function apiRequest<T = unknown>(
       const logEntry = createLogEntry({
         requestId,
         method: options.method,
-        url,
+        url: logUrl,
         requestHeaders,
         requestBody: options.body ? JSON.stringify(options.body) : null,
         status: response.status,
@@ -279,7 +292,7 @@ export async function apiRequest<T = unknown>(
         const logEntry = createLogEntry({
           requestId,
           method: options.method,
-          url,
+          url: logUrl,
           requestHeaders,
           requestBody: options.body ? JSON.stringify(options.body) : null,
           status: 0,
@@ -322,7 +335,7 @@ export async function apiRequest<T = unknown>(
   const logEntry = createLogEntry({
     requestId,
     method: options.method,
-    url,
+    url: logUrl,
     requestHeaders,
     requestBody: options.body ? JSON.stringify(options.body) : null,
     status: 0,

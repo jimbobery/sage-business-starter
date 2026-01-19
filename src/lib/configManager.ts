@@ -131,25 +131,60 @@ export function hasValidCredentials(creds: Credentials | null): boolean {
   );
 }
 
+// Base URLs for Sage APIs (actual external endpoints)
+const SAGE_API_BASE_URL = 'https://api.sandbox.sbc.sage.com';
+const SAGE_SUBSCRIPTION_API_URL = 'https://api.sandbox.sbc.sage.com/slcsadapter/v2';
+const SAGE_TOKEN_URL = 'https://id-shadow.sage.com/oauth/token';
+
+// Proxy paths for local development (to avoid CORS)
+const PROXY_API_BASE_URL = '/api/sage-core';
+const PROXY_SUBSCRIPTION_API_URL = '/api/sage-subscriptions';
+const PROXY_TOKEN_URL = '/api/oauth/token';
+
+/**
+ * Checks if we're running in development mode with proxy available
+ */
+function useProxy(): boolean {
+  return import.meta.env.DEV;
+}
+
 /**
  * Gets the API base URL for Sage sandbox
+ * Uses local proxy in development to avoid CORS
  */
 export function getApiBaseUrl(): string {
-  return 'https://api.sandbox.sbc.sage.com';
+  return useProxy() ? PROXY_API_BASE_URL : SAGE_API_BASE_URL;
 }
 
 /**
  * Gets the subscription API base URL
+ * Uses local proxy in development to avoid CORS
  */
 export function getSubscriptionApiUrl(): string {
-  return 'https://api.sandbox.sbc.sage.com/slcsadapter/v2';
+  return useProxy() ? PROXY_SUBSCRIPTION_API_URL : SAGE_SUBSCRIPTION_API_URL;
 }
 
 /**
  * Gets the OAuth token URL
+ * Uses local proxy in development to avoid CORS
  */
 export function getTokenUrl(): string {
-  return 'https://id-shadow.sage.com/oauth/token';
+  return useProxy() ? PROXY_TOKEN_URL : SAGE_TOKEN_URL;
+}
+
+/**
+ * Gets the original (non-proxied) API URLs for logging/display purposes
+ */
+export function getOriginalApiBaseUrl(): string {
+  return SAGE_API_BASE_URL;
+}
+
+export function getOriginalSubscriptionApiUrl(): string {
+  return SAGE_SUBSCRIPTION_API_URL;
+}
+
+export function getOriginalTokenUrl(): string {
+  return SAGE_TOKEN_URL;
 }
 
 // Export as object for convenient imports
@@ -162,4 +197,7 @@ export const configManager = {
   getApiBaseUrl,
   getSubscriptionApiUrl,
   getTokenUrl,
+  getOriginalApiBaseUrl,
+  getOriginalSubscriptionApiUrl,
+  getOriginalTokenUrl,
 };
