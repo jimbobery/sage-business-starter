@@ -31,9 +31,11 @@ export const subscriptionService = {
     const config = await getConfig();
     const creds = config.credentials || credentials;
     
+    const idempotencyKey = generateIdempotencyKey();
+    
     const requestBody: CreateTenantRequest = {
       ProductCode: creds.productCode || 'SAGE_ONE',
-      ReferenceId: generateIdempotencyKey(),
+      ReferenceId: idempotencyKey,
       Business: {
         Name: data.businessName,
         BusinessTypeCode: creds.businessTypeCode || 'SOLE_TRADER',
@@ -44,7 +46,7 @@ export const subscriptionService = {
     const response = await apiClient.post<CreateTenantResponse>(
       SUBSCRIPTIONS_BASE_URL,
       requestBody,
-      { tokenType: 'subscription', featureArea: 'tenants', credentials }
+      { tokenType: 'subscription', featureArea: 'tenants', credentials, idempotencyKey }
     );
 
     return response;
