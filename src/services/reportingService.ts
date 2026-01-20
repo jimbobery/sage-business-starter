@@ -1,8 +1,6 @@
 import { apiClient } from '@/lib/apiClient';
 import { Credentials } from '@/types/sage';
 
-const TENANT_API_BASE = 'https://api.sandbox.sbc.sage.com/v1';
-
 export interface ProfitLossApiResponse {
   periodStart: string;
   periodEnd: string;
@@ -17,6 +15,7 @@ export interface ProfitLossApiResponse {
 export const reportingService = {
   /**
    * Get Profit & Loss report for a tenant
+   * URL: /reportengine/v1/tenant/{TenantId}/reports/ProfitAndLoss
    */
   async getProfitAndLoss(
     tenantId: string,
@@ -29,7 +28,7 @@ export const reportingService = {
     });
 
     const response = await apiClient.get<any>(
-      `${TENANT_API_BASE}/reports/profit_and_loss?${queryParams}`,
+      `/reportengine/v1/tenant/${tenantId}/reports/ProfitAndLoss?${queryParams}`,
       { 
         tokenType: 'tenant', 
         featureArea: 'reports',
@@ -56,6 +55,7 @@ export const reportingService = {
 
   /**
    * Get balance sheet report (if available)
+   * URL: /reportengine/v1/tenant/{TenantId}/reports/BalanceSheet
    */
   async getBalanceSheet(
     tenantId: string,
@@ -67,7 +67,7 @@ export const reportingService = {
     });
 
     const response = await apiClient.get<any>(
-      `${TENANT_API_BASE}/reports/balance_sheet?${queryParams}`,
+      `/reportengine/v1/tenant/${tenantId}/reports/BalanceSheet?${queryParams}`,
       { 
         tokenType: 'tenant', 
         featureArea: 'reports',

@@ -1,7 +1,10 @@
 import { apiClient } from '@/lib/apiClient';
 import { BankTransaction, SageBankPaymentRequest, SageBankReceiptRequest, CsvUploadResult, Credentials } from '@/types/sage';
+import { generateIdempotencyKey } from '@/lib/idempotency';
 
-const TENANT_API_BASE = 'https://api.sandbox.sbc.sage.com/v1';
+// Journal IDs for payments and receipts as per Sage API
+const PAYMENT_JOURNAL_ID = '7078df86-3c36-f139-1b3a-390d1197b0f8';
+const RECEIPT_JOURNAL_ID = 'd6be52be-4361-1dc6-21f4-f895bba7ed5a';
 
 export interface CreateTransactionResponse {
   id: string;
@@ -14,40 +17,63 @@ export interface CreateTransactionResponse {
 }
 
 export const transactionService = {
+  /**
+   * Create a payment transaction
+   * URL: /transaction/v2/tenant/{TenantId}/journals/{PaymentJournalId}
+   */
   async createPayment(
     tenantId: string,
     data: SageBankPaymentRequest,
     credentials: Credentials
   ): Promise<CreateTransactionResponse> {
     const response = await apiClient.post<CreateTransactionResponse>(
-      `${TENANT_API_BASE}/bank_payments`,
+      `/transaction/v2/tenant/${tenantId}/journals/${PAYMENT_JOURNAL_ID}`,
       data,
-      { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
+      { 
+        tokenType: 'tenant', 
+        featureArea: 'transactions', 
+        tenantId, 
+        credentials,
+        idempotencyKey: generateIdempotencyKey()
+      }
     );
     return response;
   },
 
+  /**
+   * Create a receipt transaction
+   * URL: /transaction/v2/tenant/{TenantId}/journals/{ReceiptJournalId}
+   */
   async createReceipt(
     tenantId: string,
     data: SageBankReceiptRequest,
     credentials: Credentials
   ): Promise<CreateTransactionResponse> {
     const response = await apiClient.post<CreateTransactionResponse>(
-      `${TENANT_API_BASE}/bank_receipts`,
+      `/transaction/v2/tenant/${tenantId}/journals/${RECEIPT_JOURNAL_ID}`,
       data,
-      { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
+      { 
+        tokenType: 'tenant', 
+        featureArea: 'transactions', 
+        tenantId, 
+        credentials,
+        idempotencyKey: generateIdempotencyKey()
+      }
     );
     return response;
   },
 
+  /**
+   * Get all transactions (payments and receipts) for a tenant
+   */
   async getTransactions(tenantId: string, credentials: Credentials): Promise<BankTransaction[]> {
     const [payments, receipts] = await Promise.all([
       apiClient.get<{ data: BankTransaction[] }>(
-        `${TENANT_API_BASE}/bank_payments`,
+        `/transaction/v2/tenant/${tenantId}/journals/${PAYMENT_JOURNAL_ID}`,
         { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
       ),
       apiClient.get<{ data: BankTransaction[] }>(
-        `${TENANT_API_BASE}/bank_receipts`,
+        `/transaction/v2/tenant/${tenantId}/journals/${RECEIPT_JOURNAL_ID}`,
         { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
       ),
     ]);
@@ -62,6 +88,9 @@ export const transactionService = {
     );
   },
 
+  /**
+   * Upload transactions from CSV
+   */
   async uploadFromCsv(
     tenantId: string,
     bankAccountId: string,
