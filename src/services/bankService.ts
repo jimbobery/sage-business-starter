@@ -22,6 +22,7 @@ export interface CreateOpeningBalanceResponse {
 export const bankService = {
   /**
    * Create a new bank account for a tenant
+   * URL: /bank/v2/tenant/{TenantId}/bank-accounts
    */
   async createBankAccount(
     tenantId: string,
@@ -29,7 +30,7 @@ export const bankService = {
     credentials: Credentials
   ): Promise<CreateBankAccountResponse> {
     const response = await apiClient.post<CreateBankAccountResponse>(
-      '/v1/bank_accounts',
+      `/bank/v2/tenant/${tenantId}/bank-accounts`,
       data,
       { 
         tokenType: 'tenant', 
@@ -45,10 +46,11 @@ export const bankService = {
 
   /**
    * Get all bank accounts for a tenant
+   * URL: /bank/v2/tenant/{TenantId}/bank-accounts
    */
   async getBankAccounts(tenantId: string, credentials: Credentials): Promise<BankAccount[]> {
     const response = await apiClient.get<{ data: BankAccount[] }>(
-      '/v1/bank_accounts',
+      `/bank/v2/tenant/${tenantId}/bank-accounts`,
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
@@ -62,6 +64,7 @@ export const bankService = {
 
   /**
    * Set opening balance for a bank account
+   * URL: /bank/v2/tenant/{TenantId}/bank-opening-balances
    */
   async createOpeningBalance(
     tenantId: string,
@@ -69,7 +72,7 @@ export const bankService = {
     credentials: Credentials
   ): Promise<CreateOpeningBalanceResponse> {
     const response = await apiClient.post<CreateOpeningBalanceResponse>(
-      '/v1/bank_opening_balances',
+      `/bank/v2/tenant/${tenantId}/bank-opening-balances`,
       data,
       { 
         tokenType: 'tenant', 
@@ -85,10 +88,11 @@ export const bankService = {
 
   /**
    * Get opening balances for a tenant
+   * URL: /bank/v2/tenant/{TenantId}/bank-opening-balances
    */
   async getOpeningBalances(tenantId: string, credentials: Credentials): Promise<OpeningBalance[]> {
     const response = await apiClient.get<{ data: OpeningBalance[] }>(
-      '/v1/bank_opening_balances',
+      `/bank/v2/tenant/${tenantId}/bank-opening-balances`,
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
