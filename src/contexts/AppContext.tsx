@@ -5,7 +5,7 @@ interface AppContextType extends AppState {
   login: (password: string) => boolean;
   logout: () => void;
   setCredentials: (creds: Credentials) => void;
-  addTenant: (tenant: Omit<Tenant, 'id' | 'createdAt' | 'status'>) => Tenant;
+  addTenant: (tenant: Omit<Tenant, 'createdAt' | 'status'>) => Tenant;
   setActiveTenant: (tenantId: string) => void;
   addBankAccount: (account: Omit<BankAccount, 'id' | 'createdAt'>) => BankAccount;
   addFinancialYear: (year: Omit<FinancialYear, 'id'>) => FinancialYear;
@@ -79,10 +79,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCredentialsState(creds);
   };
 
-  const addTenant = (tenant: Omit<Tenant, 'id' | 'createdAt' | 'status'>) => {
+  const addTenant = (tenant: Omit<Tenant, 'createdAt' | 'status'>) => {
     const newTenant: Tenant = {
       ...tenant,
-      id: generateId(),
       createdAt: new Date().toISOString(),
       status: 'active',
     };
