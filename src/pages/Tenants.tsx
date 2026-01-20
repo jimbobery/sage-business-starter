@@ -53,12 +53,13 @@ export default function Tenants() {
       // Call real API
       const response = await subscriptionService.createTenant(formData, credentials);
       
-      // Also add to local state for UI
+      // Add to local state using the ID returned from the Sage API (GUID)
       const tenant = addTenant({
+        id: response.id, // Use the GUID from Sage API response
         name: formData.name,
         businessName: formData.businessName,
       });
-      setActiveTenant(tenant.id);
+      setActiveTenant(response.id);
       
       setFormData({ name: '', businessName: '' });
       setIsDialogOpen(false);
