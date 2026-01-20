@@ -1,7 +1,6 @@
 import { apiClient } from '@/lib/apiClient';
 import { BankAccount, SageBankAccountRequest, SageOpeningBalanceRequest, OpeningBalance, Credentials } from '@/types/sage';
-
-const TENANT_API_BASE = 'https://api.sandbox.sbc.sage.com/v1';
+import { generateIdempotencyKey } from '@/lib/idempotency';
 
 export interface CreateBankAccountResponse {
   id: string;
@@ -30,13 +29,14 @@ export const bankService = {
     credentials: Credentials
   ): Promise<CreateBankAccountResponse> {
     const response = await apiClient.post<CreateBankAccountResponse>(
-      `${TENANT_API_BASE}/bank_accounts`,
+      '/v1/bank_accounts',
       data,
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
         tenantId,
-        credentials
+        credentials,
+        idempotencyKey: generateIdempotencyKey()
       }
     );
 
@@ -48,7 +48,7 @@ export const bankService = {
    */
   async getBankAccounts(tenantId: string, credentials: Credentials): Promise<BankAccount[]> {
     const response = await apiClient.get<{ data: BankAccount[] }>(
-      `${TENANT_API_BASE}/bank_accounts`,
+      '/v1/bank_accounts',
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
@@ -69,13 +69,14 @@ export const bankService = {
     credentials: Credentials
   ): Promise<CreateOpeningBalanceResponse> {
     const response = await apiClient.post<CreateOpeningBalanceResponse>(
-      `${TENANT_API_BASE}/bank_opening_balances`,
+      '/v1/bank_opening_balances',
       data,
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
         tenantId,
-        credentials
+        credentials,
+        idempotencyKey: generateIdempotencyKey()
       }
     );
 
@@ -87,7 +88,7 @@ export const bankService = {
    */
   async getOpeningBalances(tenantId: string, credentials: Credentials): Promise<OpeningBalance[]> {
     const response = await apiClient.get<{ data: OpeningBalance[] }>(
-      `${TENANT_API_BASE}/bank_opening_balances`,
+      '/v1/bank_opening_balances',
       { 
         tokenType: 'tenant', 
         featureArea: 'bank-accounts',
