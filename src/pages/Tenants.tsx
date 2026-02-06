@@ -32,6 +32,7 @@ export default function Tenants() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState<string>('');
   const [loadedCredentials, setLoadedCredentials] = useState<Credentials | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -60,10 +61,15 @@ export default function Tenants() {
     }
 
     setIsLoading(true);
+    setLoadingStatus('Creating tenant...');
     
     try {
-      // Call real API with loaded credentials
-      const response = await subscriptionService.createTenant(formData, loadedCredentials!);
+      // Call real API with loaded credentials, passing status callback
+      const response = await subscriptionService.createTenant(
+        formData, 
+        loadedCredentials!,
+        (status) => setLoadingStatus(status)
+      );
       
       // Add to local state using the ID returned from the Sage API (GUID)
       const tenant = addTenant({
@@ -87,6 +93,7 @@ export default function Tenants() {
       });
     } finally {
       setIsLoading(false);
+      setLoadingStatus('');
     }
   };
 
@@ -142,7 +149,7 @@ export default function Tenants() {
                   </Button>
                   <Button type="submit" disabled={isLoading}>
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Create Tenant
+                    {isLoading && loadingStatus ? loadingStatus : 'Create Tenant'}
                   </Button>
                 </div>
               </form>
