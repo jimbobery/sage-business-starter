@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
 import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
@@ -23,22 +23,34 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
 import { subscriptionService } from '@/services/subscriptionService';
+import { getConfig, hasValidCredentials } from '@/lib/configManager';
+import { Credentials } from '@/types/sage';
 
 export default function Tenants() {
-  const { tenants, activeTenantId, addTenant, setActiveTenant, credentials } = useApp();
+  const { tenants, activeTenantId, addTenant, setActiveTenant } = useApp();
   const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadedCredentials, setLoadedCredentials] = useState<Credentials | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     businessName: '',
   });
 
+  // Load credentials from configManager on mount
+  useEffect(() => {
+    async function loadCredentials() {
+      const config = await getConfig();
+      setLoadedCredentials(config.credentials);
+    }
+    loadCredentials();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!credentials?.subscriptionClientId || !credentials?.subscriptionClientSecret) {
+    if (!hasValidCredentials(loadedCredentials)) {
       toast({
         title: "Configuration required",
         description: "Please configure your API credentials in Admin Settings first.",
@@ -50,8 +62,8 @@ export default function Tenants() {
     setIsLoading(true);
     
     try {
-      // Call real API
-      const response = await subscriptionService.createTenant(formData, credentials);
+      // Call real API with loaded credentials
+      const response = await subscriptionService.createTenant(formData, loadedCredentials!);
       
       // Add to local state using the ID returned from the Sage API (GUID)
       const tenant = addTenant({
