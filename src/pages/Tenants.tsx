@@ -183,6 +183,13 @@ export default function Tenants() {
                   <h3 className="font-semibold text-foreground mb-1">{tenant.businessName}</h3>
                   <p className="text-sm text-muted-foreground mb-3">{tenant.name}</p>
                   
+                  {/* Show Tenant ID in Developer Mode */}
+                  {isDeveloperMode && (
+                    <div className="mb-3 p-2 bg-muted rounded text-xs font-mono text-muted-foreground break-all">
+                      <span className="text-foreground/60">ID:</span> {tenant.id}
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Clock className="w-3 h-3" />
                     Created {new Date(tenant.createdAt).toLocaleDateString()}

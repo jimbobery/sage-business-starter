@@ -68,6 +68,12 @@ export function Sidebar() {
               ))}
             </SelectContent>
           </Select>
+          {/* Show Active Tenant ID in Developer Mode */}
+          {isDeveloperMode && activeTenantId && (
+            <div className="mt-2 p-2 bg-sidebar-accent/50 rounded text-xs font-mono text-sidebar-foreground/70 break-all">
+              {activeTenantId}
+            </div>
+          )}
         </div>
       )}
 
