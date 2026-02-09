@@ -55,6 +55,8 @@ export default function BankAccounts() {
   const activeTenant = getActiveTenant();
   const tenantAccounts = bankAccounts.filter(a => a.tenantId === activeTenantId);
 
+  const [creationStatus, setCreationStatus] = useState('');
+
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTenantId) return;
@@ -69,20 +71,28 @@ export default function BankAccounts() {
     }
 
     setIsLoading(true);
+    setCreationStatus('');
     
     try {
-      // Call real API
-      await bankService.createBankAccount(activeTenantId, accountForm, credentials);
+      // Call real API with 202 handling
+      const result = await bankService.createBankAccount(
+        activeTenantId, 
+        accountForm, 
+        credentials,
+        setCreationStatus
+      );
       
-      // Also add to local state for UI
+      // Store with the Sage-provided GUID as the id
       addBankAccount({
         ...accountForm,
         tenantId: activeTenantId,
         balance: 0,
+        id: result.Id, // Use Sage GUID
       });
       
-      setAccountForm({ name: '', accountNumber: '', sortCode: '', currencyISO: 'GBP' });
+      setAccountForm({ name: '', accountNumber: '', sortCode: '', currencyISO: 'GBP', accountType: 'Checking' });
       setIsAccountDialogOpen(false);
+      setCreationStatus('');
       toast({
         title: "Bank account created",
         description: `${accountForm.name} has been added successfully.`,
@@ -95,6 +105,7 @@ export default function BankAccounts() {
       });
     } finally {
       setIsLoading(false);
+      setCreationStatus('');
     }
   };
 
@@ -250,7 +261,7 @@ export default function BankAccounts() {
                   </Button>
                   <Button type="submit" disabled={isLoading}>
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Add Account
+                    {isLoading && creationStatus ? creationStatus : 'Add Account'}
                   </Button>
                 </div>
               </form>

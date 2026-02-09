@@ -19,10 +19,11 @@ export interface Tenant {
 export interface BankAccount {
   id: string;
   tenantId: string;
-  accountName: string;
+  name: string;
   accountNumber: string;
   sortCode: string;
-  currency: string;
+  currencyISO: string;
+  accountType: string;
   balance: number;
   createdAt: string;
 }
@@ -32,6 +33,7 @@ export interface FinancialYear {
   tenantId: string;
   startDate: string;
   endDate: string;
+  periodType: string;
   status: 'open' | 'closed';
 }
 
@@ -127,10 +129,11 @@ export interface SageTenantRequest {
 }
 
 export interface SageBankAccountRequest {
-  accountName: string;
+  name: string;
   accountNumber: string;
   sortCode: string;
-  currency: string;
+  currencyISO: string;
+  accountType: string;
 }
 
 export interface SageOpeningBalanceRequest {
@@ -142,6 +145,7 @@ export interface SageOpeningBalanceRequest {
 export interface SageFinancialYearRequest {
   startDate: string;
   endDate: string;
+  periodType: string;
 }
 
 export interface SageBankPaymentRequest {

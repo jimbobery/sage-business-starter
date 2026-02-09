@@ -7,7 +7,7 @@ interface AppContextType extends AppState {
   setCredentials: (creds: Credentials) => void;
   addTenant: (tenant: Omit<Tenant, 'createdAt' | 'status'>) => Tenant;
   setActiveTenant: (tenantId: string) => void;
-  addBankAccount: (account: Omit<BankAccount, 'id' | 'createdAt'>) => BankAccount;
+  addBankAccount: (account: Omit<BankAccount, 'createdAt'> & { id?: string }) => BankAccount;
   addFinancialYear: (year: Omit<FinancialYear, 'id'>) => FinancialYear;
   addOpeningBalance: (balance: Omit<OpeningBalance, 'id'>) => OpeningBalance;
   addTransactions: (transactions: Omit<BankTransaction, 'id'>[]) => BankTransaction[];
@@ -93,10 +93,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveTenantId(tenantId);
   };
 
-  const addBankAccount = (account: Omit<BankAccount, 'id' | 'createdAt'>) => {
+  const addBankAccount = (account: Omit<BankAccount, 'createdAt'> & { id?: string }) => {
     const newAccount: BankAccount = {
       ...account,
-      id: generateId(),
+      id: account.id || generateId(),
       createdAt: new Date().toISOString(),
     };
     setBankAccounts(prev => [...prev, newAccount]);
