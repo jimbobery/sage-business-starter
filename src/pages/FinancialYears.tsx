@@ -60,6 +60,7 @@ export default function FinancialYears() {
       await financialService.createFinancialYear(activeTenantId, {
         startDate: formData.startDate,
         endDate: formData.endDate,
+        periodType: "Monthly",
       }, credentials);
       
       // Also add to local state for UI
@@ -67,6 +68,7 @@ export default function FinancialYears() {
         tenantId: activeTenantId,
         startDate: formData.startDate,
         endDate: formData.endDate,
+        periodType: "Monthly",
         status: 'open',
       });
       

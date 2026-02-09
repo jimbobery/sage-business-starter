@@ -40,10 +40,11 @@ export default function BankAccounts() {
   const [isLoading, setIsLoading] = useState(false);
   
   const [accountForm, setAccountForm] = useState({
-    accountName: '',
+    name: '',
     accountNumber: '',
     sortCode: '',
-    currency: 'GBP',
+    currencyISO: 'GBP',
+    accountType: "Checking",
   });
   
   const [balanceForm, setBalanceForm] = useState({
@@ -80,11 +81,11 @@ export default function BankAccounts() {
         balance: 0,
       });
       
-      setAccountForm({ accountName: '', accountNumber: '', sortCode: '', currency: 'GBP' });
+      setAccountForm({ name: '', accountNumber: '', sortCode: '', currencyISO: 'GBP' });
       setIsAccountDialogOpen(false);
       toast({
         title: "Bank account created",
-        description: `${accountForm.accountName} has been added successfully.`,
+        description: `${accountForm.name} has been added successfully.`,
       });
     } catch (error: any) {
       toast({
@@ -192,11 +193,11 @@ export default function BankAccounts() {
               </DialogHeader>
               <form onSubmit={handleCreateAccount} className="space-y-4 mt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="accountName">Account Name</Label>
+                  <Label htmlFor="name">Account Name</Label>
                   <Input
-                    id="accountName"
-                    value={accountForm.accountName}
-                    onChange={(e) => setAccountForm(prev => ({ ...prev, accountName: e.target.value }))}
+                    id="name"
+                    value={accountForm.name}
+                    onChange={(e) => setAccountForm(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., Business Current Account"
                     required
                     disabled={isLoading}
@@ -227,10 +228,10 @@ export default function BankAccounts() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
+                  <Label htmlFor="currencyISO">Currency</Label>
                   <Select 
-                    value={accountForm.currency} 
-                    onValueChange={(value) => setAccountForm(prev => ({ ...prev, currency: value }))}
+                    value={accountForm.currencyISO} 
+                    onValueChange={(value) => setAccountForm(prev => ({ ...prev, currencyISO: value }))}
                     disabled={isLoading}
                   >
                     <SelectTrigger>
@@ -288,12 +289,12 @@ export default function BankAccounts() {
               <tbody>
                 {tenantAccounts.map((account) => (
                   <tr key={account.id}>
-                    <td className="font-medium">{account.accountName}</td>
+                    <td className="font-medium">{account.name}</td>
                     <td className="font-mono text-sm">{account.accountNumber}</td>
                     <td className="font-mono text-sm">{account.sortCode}</td>
-                    <td>{account.currency}</td>
+                    <td>{account.currencyISO}</td>
                     <td className="text-right font-semibold">
-                      {account.currency === 'GBP' ? '£' : account.currency === 'EUR' ? '€' : '$'}
+                      {account.currencyISO === 'GBP' ? '£' : account.currencyISO === 'EUR' ? '€' : '$'}
                       {account.balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="text-right">
