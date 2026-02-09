@@ -43,6 +43,7 @@ export default function Admin() {
     productCode: '',
     platform: '',
     businessTypeCode: '',
+    bankOpeningBalanceJournalCode: '',
   });
 
   useEffect(() => {
@@ -63,6 +64,7 @@ export default function Admin() {
           productCode: config.credentials.productCode || '',
           platform: config.credentials.platform || '',
           businessTypeCode: config.credentials.businessTypeCode || '',
+          bankOpeningBalanceJournalCode: config.credentials.bankOpeningBalanceJournalCode || '',
         });
       }
     };
@@ -366,6 +368,21 @@ export default function Admin() {
                   onChange={(e) => handleChange('businessTypeCode', e.target.value)}
                   placeholder="e.g., SOLE_TRADER"
                 />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="bankOpeningBalanceJournalCode">Bank Opening Balance Journal Code</Label>
+                <Input
+                  id="bankOpeningBalanceJournalCode"
+                  value={formData.bankOpeningBalanceJournalCode}
+                  onChange={(e) => handleChange('bankOpeningBalanceJournalCode', e.target.value)}
+                  placeholder="e.g., 759b6bdc-7200-09bc-e93b-9284bd95a344"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The journal type ID used in bank opening balance API calls
+                </p>
               </div>
             </div>
           </div>

@@ -38,6 +38,7 @@ export default function BankAccounts() {
   const [isBalanceDialogOpen, setIsBalanceDialogOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [balanceStatus, setBalanceStatus] = useState('');
   
   const [accountForm, setAccountForm] = useState({
     name: '',
@@ -122,26 +123,49 @@ export default function BankAccounts() {
       return;
     }
 
+    if (!credentials.bankOpeningBalanceJournalCode) {
+      toast({
+        title: "Configuration required",
+        description: "Please set the Bank Opening Balance Journal Code in Admin Settings.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
+    setBalanceStatus('');
     
     try {
-      // Call real API
-      await bankService.createOpeningBalance(activeTenantId, {
-        bankAccountId: selectedAccountId,
-        amount: parseFloat(balanceForm.amount),
-        date: balanceForm.date,
-      }, credentials);
+      const amount = parseFloat(balanceForm.amount);
+      const requestBody = {
+        Date: balanceForm.date,
+        Reference: 'BankOpeningBalance',
+        BankAccount: {
+          Id: selectedAccountId,
+        },
+        Amount: Math.abs(amount),
+        TreatAs: (amount >= 0 ? 'Debit' : 'Credit') as 'Debit' | 'Credit',
+        Draft: 'false',
+      };
+
+      await bankService.createOpeningBalance(
+        activeTenantId,
+        credentials.bankOpeningBalanceJournalCode,
+        requestBody,
+        credentials,
+        setBalanceStatus
+      );
       
-      // Also update local state
       addOpeningBalance({
         bankAccountId: selectedAccountId,
-        amount: parseFloat(balanceForm.amount),
+        amount,
         date: balanceForm.date,
       });
       
       setBalanceForm({ amount: '', date: new Date().toISOString().split('T')[0] });
       setIsBalanceDialogOpen(false);
       setSelectedAccountId(null);
+      setBalanceStatus('');
       toast({
         title: "Opening balance set",
         description: "The opening balance has been recorded.",
@@ -154,6 +178,7 @@ export default function BankAccounts() {
       });
     } finally {
       setIsLoading(false);
+      setBalanceStatus('');
     }
   };
 
@@ -365,7 +390,7 @@ export default function BankAccounts() {
                 </Button>
                 <Button type="submit" disabled={isLoading}>
                   {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Set Balance
+                  {isLoading && balanceStatus ? balanceStatus : 'Set Balance'}
                 </Button>
               </div>
             </form>

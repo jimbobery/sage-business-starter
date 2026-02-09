@@ -9,10 +9,7 @@ export interface CreateBankAccountResponse {
 }
 
 export interface CreateOpeningBalanceResponse {
-  id: string;
-  bankAccountId: string;
-  amount: number;
-  date: string;
+  Id: string;
 }
 
 function sleep(seconds: number): Promise<void> {
@@ -113,43 +110,89 @@ export const bankService = {
 
   /**
    * Set opening balance for a bank account
-   * URL: /bank/v2/tenant/{TenantId}/bank-opening-balances
+   * URL: /transaction/v2/tenant/{TenantId}/journals/{BankOpeningBalanceJournalTypeId}
    */
   async createOpeningBalance(
     tenantId: string,
+    journalCode: string,
     data: SageOpeningBalanceRequest,
-    credentials: Credentials
+    credentials: Credentials,
+    onStatusChange?: StatusCallback
   ): Promise<CreateOpeningBalanceResponse> {
     const idempotencyKey = generateIdempotencyKey();
+    const endpoint = `/transaction/v2/tenant/${tenantId}/journals/${journalCode}`;
+
+    onStatusChange?.('Setting opening balance...');
+
     const response = await apiRequest<CreateOpeningBalanceResponse>(
       {
         method: 'POST',
-        endpoint: `/transaction/v2/tenant/${tenantId}/journals/759b6bdc-7200-09bc-e93b-9284bd95a344`,
+        endpoint,
         body: data,
         tokenType: 'tenant',
         featureArea: 'bank-accounts',
         tenantId,
         idempotencyKey,
+        retries: 0,
       },
       credentials
     );
 
-    if (!response.success || !response.data) {
-      throw new Error(response.error || 'Failed to create opening balance');
+    // Handle 202 Accepted - async processing
+    if (response.status === 202) {
+      const retryAfter = parseInt(response.headers['retry-after'] || '3', 10);
+
+      onStatusChange?.(`Processing... waiting ${retryAfter} seconds`);
+      await sleep(retryAfter);
+
+      onStatusChange?.('Checking status...');
+
+      const retryResponse = await apiRequest<CreateOpeningBalanceResponse>(
+        {
+          method: 'POST',
+          endpoint,
+          body: data,
+          tokenType: 'tenant',
+          featureArea: 'bank-accounts',
+          tenantId,
+          idempotencyKey,
+          retries: 2,
+        },
+        credentials
+      );
+
+      if (!retryResponse.success || !retryResponse.data) {
+        throw new Error(retryResponse.error || 'Failed to get opening balance result');
+      }
+
+      return retryResponse.data;
     }
 
-    return response.data;
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.error || 'Failed to create opening balance');
   },
 
   /**
-   * Get opening balances for a tenant
-   * URL: /bank/v2/tenant/{TenantId}/bank-opening-balances
+   * Get opening balances (journal entries) for a tenant
+   * URL: /transaction/v1/tenant/{TenantId}/journals?start-date=...&end-date=...&$filter=...
    */
-  async getOpeningBalances(tenantId: string, credentials: Credentials): Promise<OpeningBalance[]> {
+  async getOpeningBalances(
+    tenantId: string,
+    journalCode: string,
+    startDate: string,
+    endDate: string,
+    credentials: Credentials
+  ): Promise<OpeningBalance[]> {
+    const filter = `(status eq 'completed') and (journaltype.id eq ${journalCode})`;
+    const endpoint = `/transaction/v1/tenant/${tenantId}/journals?start-date=${startDate}&end-date=${endDate}&$filter=${encodeURIComponent(filter)}`;
+
     const response = await apiRequest<{ data: OpeningBalance[] }>(
       {
         method: 'GET',
-        endpoint: `/bank/v2/tenant/${tenantId}/bank-opening-balances`,
+        endpoint,
         tokenType: 'tenant',
         featureArea: 'bank-accounts',
         tenantId,

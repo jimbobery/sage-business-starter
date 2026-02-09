@@ -37,6 +37,7 @@ async function loadFileConfig(): Promise<Credentials | null> {
         productCode: config.productCode || 'SAGE_ONE',
         platform: config.platform || 'UK',
         businessTypeCode: config.businessTypeCode || 'SOLE_TRADER',
+        bankOpeningBalanceJournalCode: config.bankOpeningBalanceJournalCode || '',
       };
     }
   } catch {

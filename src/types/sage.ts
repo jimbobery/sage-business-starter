@@ -6,6 +6,7 @@ export interface Credentials {
   productCode: string;
   platform: string;
   businessTypeCode: string;
+  bankOpeningBalanceJournalCode: string;
 }
 
 export interface Tenant {
@@ -137,9 +138,14 @@ export interface SageBankAccountRequest {
 }
 
 export interface SageOpeningBalanceRequest {
-  bankAccountId: string;
-  amount: number;
-  date: string;
+  Date: string;
+  Reference: string;
+  BankAccount: {
+    Id: string;
+  };
+  Amount: number;
+  TreatAs: 'Debit' | 'Credit';
+  Draft: string;
 }
 
 export interface SageFinancialYearRequest {
