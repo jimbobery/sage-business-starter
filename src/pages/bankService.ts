@@ -73,7 +73,7 @@ export const bankService = {
     credentials: Credentials
   ): Promise<CreateOpeningBalanceResponse> {
     const response = await apiClient.post<CreateOpeningBalanceResponse>(
-      `/bank/v2/tenant/${tenantId}/bank-opening-balances`,
+      `/transaction/v2/tenant/${tenantId}/journals/759b6bdc-7200-09bc-e93b-9284bd95a344`,
       data,
       { 
         tokenType: 'tenant', 
