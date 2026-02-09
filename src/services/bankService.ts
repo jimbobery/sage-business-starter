@@ -124,7 +124,7 @@ export const bankService = {
     const response = await apiRequest<CreateOpeningBalanceResponse>(
       {
         method: 'POST',
-        endpoint: `/bank/v2/tenant/${tenantId}/bank-opening-balances`,
+        endpoint: `/transaction/v2/tenant/${tenantId}/journals/759b6bdc-7200-09bc-e93b-9284bd95a344`,
         body: data,
         tokenType: 'tenant',
         featureArea: 'bank-accounts',
