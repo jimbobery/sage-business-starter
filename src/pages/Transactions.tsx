@@ -231,7 +231,7 @@ export default function Transactions() {
                   <SelectContent>
                     {tenantAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
-                        {account.accountName}
+                        {account.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
