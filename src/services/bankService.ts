@@ -12,6 +12,31 @@ export interface CreateOpeningBalanceResponse {
   Id: string;
 }
 
+export interface SageJournalEntry {
+  Id: string;
+  JournalType: {
+    Id: string;
+    Code: string;
+  };
+  Date: string;
+  Reference: string | null;
+  Status: string;
+  TreatAs: 'Debit' | 'Credit';
+  TotalAmount: {
+    Base: number;
+    Currency: number;
+  };
+  BankAccount: {
+    Id: string;
+    Name: string;
+  };
+  Currency: {
+    Code: string;
+    ExchangeRate: number;
+  };
+  TransactionNumber: string;
+}
+
 function sleep(seconds: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, seconds * 1000));
 }
@@ -205,5 +230,37 @@ export const bankService = {
     }
 
     return response.data?.data || [];
+  },
+
+  /**
+   * Get transactions for a specific bank account
+   * URL: /transaction/v1/tenant/{TenantId}/journals?start-date=...&end-date=...&$filter=bankaccount.id eq {bankAccountId}&$orderby=date desc
+   */
+  async getAccountTransactions(
+    tenantId: string,
+    bankAccountId: string,
+    startDate: string,
+    endDate: string,
+    credentials: Credentials
+  ): Promise<SageJournalEntry[]> {
+    const filter = `bankaccount.id eq ${bankAccountId}`;
+    const endpoint = `/transaction/v1/tenant/${tenantId}/journals?start-date=${startDate}&end-date=${endDate}&$filter=${encodeURIComponent(filter)}&$orderby=${encodeURIComponent('date desc')}`;
+
+    const response = await apiRequest<SageJournalEntry[]>(
+      {
+        method: 'GET',
+        endpoint,
+        tokenType: 'tenant',
+        featureArea: 'bank-accounts',
+        tenantId,
+      },
+      credentials
+    );
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to fetch transactions');
+    }
+
+    return response.data || [];
   },
 };

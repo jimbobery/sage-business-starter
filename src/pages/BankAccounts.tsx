@@ -10,7 +10,8 @@ import {
   Landmark,
   AlertCircle,
   Banknote,
-  Loader2
+  Loader2,
+  List
 } from 'lucide-react';
 import {
   Dialog,
@@ -29,6 +30,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
 import { bankService } from '@/services/bankService';
+import { BankTransactionsDrawer } from '@/components/bank/BankTransactionsDrawer';
+import { BankAccount } from '@/types/sage';
 
 export default function BankAccounts() {
   const { bankAccounts, activeTenantId, addBankAccount, addOpeningBalance, getActiveTenant, credentials } = useApp();
@@ -37,6 +40,8 @@ export default function BankAccounts() {
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [isBalanceDialogOpen, setIsBalanceDialogOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [transactionsAccount, setTransactionsAccount] = useState<BankAccount | null>(null);
+  const [isTransactionsOpen, setIsTransactionsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [balanceStatus, setBalanceStatus] = useState('');
   
@@ -333,7 +338,18 @@ export default function BankAccounts() {
                       {account.currencyISO === 'GBP' ? '£' : account.currencyISO === 'EUR' ? '€' : '$'}
                       {account.balance.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="text-right">
+                    <td className="text-right space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setTransactionsAccount(account);
+                          setIsTransactionsOpen(true);
+                        }}
+                      >
+                        <List className="w-4 h-4 mr-1" />
+                        Transactions
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -396,6 +412,13 @@ export default function BankAccounts() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Bank Transactions Drawer */}
+        <BankTransactionsDrawer
+          account={transactionsAccount}
+          open={isTransactionsOpen}
+          onOpenChange={setIsTransactionsOpen}
+        />
 
         {/* API Integration Panel - Only visible in Developer Mode */}
         {isDeveloperMode && (
