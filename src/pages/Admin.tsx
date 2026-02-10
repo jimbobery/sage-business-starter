@@ -5,6 +5,7 @@ import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Save, 
   Key, 
@@ -15,14 +16,17 @@ import {
   FileJson,
   RefreshCw,
   Clock,
-  Loader2
+  Loader2,
+  Layers
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getConfig, saveConfig } from '@/lib/configManager';
 import { getTokenMetadata, getToken, clearToken } from '@/lib/tokenManager';
+import { dimensionService } from '@/services/dimensionService';
+import { SageDimension, RequiredDimension } from '@/types/sage';
 
 export default function Admin() {
-  const { credentials, setCredentials } = useApp();
+  const { credentials, setCredentials, activeTenantId, requiredDimensions, setRequiredDimensions } = useApp();
   const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
@@ -35,6 +39,13 @@ export default function Admin() {
     tenant: { valid: false, expiresAt: null },
   });
   
+  // Dimension state
+  const [dimensions, setDimensions] = useState<SageDimension[]>([]);
+  const [isLoadingDimensions, setIsLoadingDimensions] = useState(false);
+  const [selectedDimensionIds, setSelectedDimensionIds] = useState<Set<string>>(
+    new Set(requiredDimensions.map(d => d.id))
+  );
+
   const [formData, setFormData] = useState({
     clientId: '',
     clientSecret: '',
@@ -47,12 +58,10 @@ export default function Admin() {
   });
 
   useEffect(() => {
-    // Load config asynchronously
     const loadConfig = async () => {
       const config = await getConfig();
       setIsConfigLoaded(config.fileConfigLoaded);
       
-      // Use credentials from context or loaded config
       if (credentials) {
         setFormData(credentials);
       } else if (config.credentials) {
@@ -72,6 +81,11 @@ export default function Admin() {
     loadConfig();
     updateTokenStatus();
   }, [credentials]);
+
+  // Sync selected dimensions when requiredDimensions changes
+  useEffect(() => {
+    setSelectedDimensionIds(new Set(requiredDimensions.map(d => d.id)));
+  }, [requiredDimensions]);
 
   const updateTokenStatus = () => {
     const subscriptionMeta = getTokenMetadata('subscription');
@@ -96,8 +110,6 @@ export default function Admin() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCredentials(formData);
-    
-    // Also save to config manager
     saveConfig(formData);
     
     toast({
@@ -110,13 +122,9 @@ export default function Admin() {
     setIsTesting(type);
     
     try {
-      // First save the current credentials
       saveConfig(formData);
-      
-      // Clear existing token to force a fresh fetch
       clearToken(type);
       
-      // Try to get a token
       const clientId = type === 'subscription' ? formData.subscriptionClientId : formData.clientId;
       const clientSecret = type === 'subscription' ? formData.subscriptionClientSecret : formData.clientSecret;
       
@@ -144,6 +152,59 @@ export default function Admin() {
     } finally {
       setIsTesting(null);
     }
+  };
+
+  const handleLoadDimensions = async () => {
+    if (!activeTenantId || !credentials) {
+      toast({
+        title: "Cannot load dimensions",
+        description: "Please select a tenant and configure credentials first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingDimensions(true);
+    try {
+      const dims = await dimensionService.getDimensions(activeTenantId, credentials);
+      // Only show active dimensions
+      const activeDims = (Array.isArray(dims) ? dims : []).filter(d => d.IsActive);
+      setDimensions(activeDims);
+      toast({
+        title: "Dimensions loaded",
+        description: `Found ${activeDims.length} active dimension(s).`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to load dimensions",
+        description: error.message || "Could not fetch dimensions from API.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingDimensions(false);
+    }
+  };
+
+  const handleDimensionToggle = (dim: SageDimension, checked: boolean) => {
+    const newSet = new Set(selectedDimensionIds);
+    if (checked) {
+      newSet.add(dim.Id);
+    } else {
+      newSet.delete(dim.Id);
+    }
+    setSelectedDimensionIds(newSet);
+  };
+
+  const handleSaveDimensions = () => {
+    const selected: RequiredDimension[] = dimensions
+      .filter(d => selectedDimensionIds.has(d.Id))
+      .map(d => ({ id: d.Id, code: d.Code, name: d.Name }));
+    
+    setRequiredDimensions(selected);
+    toast({
+      title: "Dimension settings saved",
+      description: `${selected.length} dimension(s) marked as required for transactions.`,
+    });
   };
 
   const formatExpiry = (timestamp: number | null) => {
@@ -401,6 +462,75 @@ export default function Admin() {
             </Button>
           </div>
         </form>
+
+        {/* Dimensions Configuration */}
+        <div className="form-section mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Layers className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="section-title">Transaction Dimensions</h2>
+                <p className="section-description">Select which dimensions are required when uploading transactions</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleLoadDimensions}
+              disabled={isLoadingDimensions || !activeTenantId || !credentials}
+            >
+              {isLoadingDimensions ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Load Dimensions
+            </Button>
+          </div>
+
+          {!activeTenantId && (
+            <p className="text-sm text-muted-foreground">Select a tenant first to load dimensions.</p>
+          )}
+
+          {dimensions.length > 0 && (
+            <div className="space-y-3">
+              {dimensions.map((dim) => (
+                <div key={dim.Id} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                  <Checkbox
+                    id={`dim-${dim.Id}`}
+                    checked={selectedDimensionIds.has(dim.Id)}
+                    onCheckedChange={(checked) => handleDimensionToggle(dim, checked === true)}
+                  />
+                  <label htmlFor={`dim-${dim.Id}`} className="flex-1 cursor-pointer">
+                    <span className="font-medium text-foreground">{dim.Name}</span>
+                    <span className="text-sm text-muted-foreground ml-2">({dim.Code})</span>
+                  </label>
+                </div>
+              ))}
+
+              <Button type="button" onClick={handleSaveDimensions} className="mt-2">
+                <Save className="w-4 h-4 mr-2" />
+                Save Dimension Settings
+              </Button>
+            </div>
+          )}
+
+          {requiredDimensions.length > 0 && dimensions.length === 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Currently required dimensions:</p>
+              {requiredDimensions.map((dim) => (
+                <div key={dim.id} className="flex items-center gap-2 text-sm p-2 bg-muted rounded">
+                  <CheckCircle2 className="w-4 h-4 text-success" />
+                  <span className="font-medium">{dim.name}</span>
+                  <span className="text-muted-foreground">({dim.code})</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Info Box */}
         <div className="mt-8 p-4 bg-muted rounded-lg space-y-3">

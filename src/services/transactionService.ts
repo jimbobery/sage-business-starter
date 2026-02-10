@@ -1,5 +1,13 @@
-import { apiClient } from '@/lib/apiClient';
-import { BankTransaction, SageBankPaymentRequest, SageBankReceiptRequest, CsvUploadResult, Credentials } from '@/types/sage';
+import { apiClient, apiRequest } from '@/lib/apiClient';
+import { 
+  BankTransaction, 
+  CsvUploadResult, 
+  Credentials, 
+  ParsedCsvTransaction,
+  SageTransactionRequest,
+  SageTransactionDimension,
+  RequiredDimension
+} from '@/types/sage';
 import { generateIdempotencyKey } from '@/lib/idempotency';
 
 // Journal IDs for payments and receipts as per Sage API
@@ -7,101 +15,127 @@ const PAYMENT_JOURNAL_ID = '7078df86-3c36-f139-1b3a-390d1197b0f8';
 const RECEIPT_JOURNAL_ID = 'd6be52be-4361-1dc6-21f4-f895bba7ed5a';
 
 export interface CreateTransactionResponse {
-  id: string;
-  date: string;
-  bankAccountId: string;
-  reference: string;
-  description: string;
-  amount: number;
-  category?: string;
+  Id?: string;
+  id?: string;
 }
 
 export const transactionService = {
   /**
-   * Create a payment transaction
-   * URL: /transaction/v2/tenant/{TenantId}/journals/{PaymentJournalId}
+   * Build the Dimensions array for a transaction request
    */
-  async createPayment(
-    tenantId: string,
-    data: SageBankPaymentRequest,
-    credentials: Credentials
-  ): Promise<CreateTransactionResponse> {
-    const response = await apiClient.post<CreateTransactionResponse>(
-      `/transaction/v2/tenant/${tenantId}/journals/${PAYMENT_JOURNAL_ID}`,
-      data,
-      { 
-        tokenType: 'tenant', 
-        featureArea: 'transactions', 
-        tenantId, 
-        credentials,
-        idempotencyKey: generateIdempotencyKey()
-      }
-    );
-    return response;
+  buildDimensions(
+    dimensionSelections: Record<string, string>,
+    requiredDimensions: RequiredDimension[]
+  ): SageTransactionDimension[] {
+    return requiredDimensions
+      .filter(dim => dimensionSelections[dim.code])
+      .map(dim => {
+        const tagCode = dimensionSelections[dim.code];
+        const isAllowability = dim.name.toLowerCase().includes('allowability') || 
+                               dim.code.toLowerCase().includes('allowability');
+
+        const dimension: SageTransactionDimension = {
+          Dimension: {
+            Id: dim.code,
+            ...(isAllowability ? { AllocationType: 'Percentage' } : {}),
+          },
+          DimensionTags: [
+            {
+              Id: tagCode,
+              ...(isAllowability ? { Percentage: 100 } : {}),
+            },
+          ],
+        };
+
+        return dimension;
+      });
   },
 
   /**
-   * Create a receipt transaction
-   * URL: /transaction/v2/tenant/{TenantId}/journals/{ReceiptJournalId}
+   * Create a single transaction (payment or receipt) with the correct Sage payload
    */
-  async createReceipt(
-    tenantId: string,
-    data: SageBankReceiptRequest,
-    credentials: Credentials
-  ): Promise<CreateTransactionResponse> {
-    const response = await apiClient.post<CreateTransactionResponse>(
-      `/transaction/v2/tenant/${tenantId}/journals/${RECEIPT_JOURNAL_ID}`,
-      data,
-      { 
-        tokenType: 'tenant', 
-        featureArea: 'transactions', 
-        tenantId, 
-        credentials,
-        idempotencyKey: generateIdempotencyKey()
-      }
-    );
-    return response;
-  },
-
-  /**
-   * Get all transactions (payments and receipts) for a tenant
-   */
-  async getTransactions(tenantId: string, credentials: Credentials): Promise<BankTransaction[]> {
-    const [payments, receipts] = await Promise.all([
-      apiClient.get<{ data: BankTransaction[] }>(
-        `/transaction/v2/tenant/${tenantId}/journals/${PAYMENT_JOURNAL_ID}`,
-        { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
-      ),
-      apiClient.get<{ data: BankTransaction[] }>(
-        `/transaction/v2/tenant/${tenantId}/journals/${RECEIPT_JOURNAL_ID}`,
-        { tokenType: 'tenant', featureArea: 'transactions', tenantId, credentials }
-      ),
-    ]);
-
-    const allTransactions = [
-      ...(payments.data || []).map(t => ({ ...t, type: 'payment' as const })),
-      ...(receipts.data || []).map(t => ({ ...t, type: 'receipt' as const })),
-    ];
-
-    return allTransactions.sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-  },
-
-  /**
-   * Upload transactions from CSV
-   */
-  async uploadFromCsv(
+  async createTransaction(
     tenantId: string,
     bankAccountId: string,
-    transactions: Array<{
-      type: 'payment' | 'receipt';
-      date: string;
-      description: string;
-      reference: string;
-      amount: number;
-      category?: string;
-    }>,
+    tx: ParsedCsvTransaction,
+    requiredDimensions: RequiredDimension[],
+    credentials: Credentials
+  ): Promise<CreateTransactionResponse> {
+    const journalId = tx.type === 'payment' ? PAYMENT_JOURNAL_ID : RECEIPT_JOURNAL_ID;
+    const treatAs = tx.type === 'receipt' ? 'Debit' : 'Credit';
+    
+    const dimensions = this.buildDimensions(tx.dimensionSelections, requiredDimensions);
+
+    const requestData: SageTransactionRequest = {
+      Date: tx.date,
+      Reference: tx.reference,
+      BankAccount: {
+        Id: bankAccountId,
+      },
+      Items: [
+        {
+          Order: 0,
+          Date: tx.date,
+          AmountType: 'TaxesExcluded',
+          Amount: tx.amount,
+          TreatAs: treatAs,
+          Dimensions: dimensions,
+        },
+      ],
+    };
+
+    const idempotencyKey = generateIdempotencyKey();
+    const response = await apiRequest<CreateTransactionResponse>(
+      {
+        method: 'POST',
+        endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
+        body: requestData,
+        tokenType: 'tenant',
+        featureArea: 'transactions',
+        tenantId,
+        idempotencyKey,
+      },
+      credentials
+    );
+
+    // Handle 202 async processing
+    if (response.status === 202) {
+      const retryAfter = parseInt(response.headers['retry-after'] || '2', 10);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+
+      const followUp = await apiRequest<CreateTransactionResponse>(
+        {
+          method: 'POST',
+          endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
+          body: requestData,
+          tokenType: 'tenant',
+          featureArea: 'transactions',
+          tenantId,
+          idempotencyKey,
+        },
+        credentials
+      );
+
+      if (!followUp.success) {
+        throw new Error(followUp.error || `Follow-up failed: ${followUp.status}`);
+      }
+      return followUp.data!;
+    }
+
+    if (!response.success) {
+      throw new Error(response.error || `Request failed: ${response.status}`);
+    }
+    return response.data!;
+  },
+
+  /**
+   * Upload parsed CSV transactions with dimension selections
+   */
+  async uploadTransactions(
+    tenantId: string,
+    bankAccountId: string,
+    transactions: ParsedCsvTransaction[],
+    requiredDimensions: RequiredDimension[],
     credentials: Credentials
   ): Promise<CsvUploadResult[]> {
     const results: CsvUploadResult[] = [];
@@ -109,28 +143,20 @@ export const transactionService = {
     for (let i = 0; i < transactions.length; i++) {
       const tx = transactions[i];
       try {
-        const requestData = {
-          date: tx.date,
+        const response = await this.createTransaction(
+          tenantId,
           bankAccountId,
-          reference: tx.reference,
-          description: tx.description,
-          amount: tx.amount,
-          category: tx.category,
-        };
-
-        let response: CreateTransactionResponse;
-        if (tx.type === 'payment') {
-          response = await this.createPayment(tenantId, requestData, credentials);
-        } else {
-          response = await this.createReceipt(tenantId, requestData, credentials);
-        }
+          tx,
+          requiredDimensions,
+          credentials
+        );
 
         results.push({
-          row: i + 1,
+          row: tx.rowIndex,
           success: true,
           status: 201,
           data: {
-            id: response.id,
+            id: response.Id || response.id || '',
             tenantId,
             bankAccountId,
             type: tx.type,
@@ -143,7 +169,7 @@ export const transactionService = {
         });
       } catch (error: any) {
         results.push({
-          row: i + 1,
+          row: tx.rowIndex,
           success: false,
           status: error.status || 500,
           message: error.message || 'Unknown error',

@@ -172,6 +172,71 @@ export interface SageBankReceiptRequest {
   category?: string;
 }
 
+// Dimension types from Sage API
+export interface SageDimension {
+  Id: string;
+  Code: string;
+  Name: string;
+  IsActive: boolean;
+}
+
+export interface SageDimensionTag {
+  Id: string;
+  Code: string;
+  Name: string;
+  IsActive: boolean;
+}
+
+export interface RequiredDimension {
+  id: string;
+  code: string;
+  name: string;
+}
+
+// Transaction payload types for Sage journal API
+export interface SageTransactionDimensionTag {
+  Id: string;
+  Percentage?: number;
+}
+
+export interface SageTransactionDimension {
+  Dimension: {
+    Id: string;
+    AllocationType?: string;
+  };
+  DimensionTags: SageTransactionDimensionTag[];
+}
+
+export interface SageTransactionItem {
+  Order: number;
+  Date: string;
+  AmountType: string;
+  Amount: number;
+  TreatAs: 'Debit' | 'Credit';
+  Dimensions: SageTransactionDimension[];
+}
+
+export interface SageTransactionRequest {
+  Date: string;
+  Reference: string;
+  BankAccount: {
+    Id: string;
+  };
+  Items: SageTransactionItem[];
+}
+
+// Parsed CSV transaction with dimension selections
+export interface ParsedCsvTransaction {
+  rowIndex: number;
+  type: 'payment' | 'receipt';
+  date: string;
+  description: string;
+  reference: string;
+  amount: number;
+  category?: string;
+  dimensionSelections: Record<string, string>; // dimensionCode -> tagCode
+}
+
 // CSV upload types
 export interface CsvUploadResult {
   row: number;
