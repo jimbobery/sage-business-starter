@@ -15,7 +15,7 @@ import { logApiCall, ApiLogEntry } from './logger';
 import { getApiBaseUrl, getSubscriptionApiUrl, getOriginalApiBaseUrl, getOriginalSubscriptionApiUrl } from './configManager';
 import { Credentials } from '@/types/sage';
 
-export type FeatureArea = 'tenants' | 'bank-accounts' | 'financial-years' | 'transactions' | 'reports' | 'auth' | 'other';
+export type FeatureArea = 'tenants' | 'bank-accounts' | 'financial-years' | 'transactions' | 'reports' | 'auth' | 'dimensions' | 'other';
 
 export interface ApiRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -56,6 +56,7 @@ const latestCalls: Record<FeatureArea, Omit<ApiLogEntry, 'id'> | null> = {
   transactions: null,
   reports: null,
   auth: null,
+  dimensions: null,
   other: null,
 };
 

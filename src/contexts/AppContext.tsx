@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AppState, Credentials, Tenant, BankAccount, FinancialYear, BankTransaction, OpeningBalance } from '@/types/sage';
+import { AppState, Credentials, Tenant, BankAccount, FinancialYear, BankTransaction, OpeningBalance, RequiredDimension } from '@/types/sage';
 
 interface AppContextType extends AppState {
   login: (password: string) => boolean;
@@ -12,6 +12,8 @@ interface AppContextType extends AppState {
   addOpeningBalance: (balance: Omit<OpeningBalance, 'id'>) => OpeningBalance;
   addTransactions: (transactions: Omit<BankTransaction, 'id'>[]) => BankTransaction[];
   getActiveTenant: () => Tenant | null;
+  requiredDimensions: RequiredDimension[];
+  setRequiredDimensions: (dims: RequiredDimension[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -28,7 +30,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [financialYears, setFinancialYears] = useState<FinancialYear[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
-
+  const [requiredDimensions, setRequiredDimensionsState] = useState<RequiredDimension[]>([]);
   // Load from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('sage-demo-state');
@@ -40,8 +42,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBankAccounts(state.bankAccounts || []);
       setFinancialYears(state.financialYears || []);
       setTransactions(state.transactions || []);
+      setRequiredDimensionsState(state.requiredDimensions || []);
     }
-    
     const auth = sessionStorage.getItem('sage-demo-auth');
     if (auth === 'true') {
       setIsAuthenticated(true);
@@ -57,9 +59,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       bankAccounts,
       financialYears,
       transactions,
+      requiredDimensions,
     };
     localStorage.setItem('sage-demo-state', JSON.stringify(state));
-  }, [credentials, tenants, activeTenantId, bankAccounts, financialYears, transactions]);
+  }, [credentials, tenants, activeTenantId, bankAccounts, financialYears, transactions, requiredDimensions]);
 
   const login = (password: string) => {
     if (password === DEMO_PASSWORD) {
@@ -137,6 +140,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return withIds;
   };
 
+  const setRequiredDimensions = (dims: RequiredDimension[]) => {
+    setRequiredDimensionsState(dims);
+  };
+
   const getActiveTenant = () => {
     return tenants.find(t => t.id === activeTenantId) || null;
   };
@@ -161,6 +168,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addOpeningBalance,
         addTransactions,
         getActiveTenant,
+        requiredDimensions,
+        setRequiredDimensions,
       }}
     >
       {children}
