@@ -165,7 +165,7 @@ export async function apiRequest<T = unknown>(
           method: options.method,
           url: logUrl,
           requestHeaders,
-          requestBody: options.body ? JSON.stringify(options.body) : null,
+          requestBody: options.body ? JSON.stringify(options.body, null, 2) : null,
           status: 0,
           statusText: 'Auth Failed',
           responseHeaders: {},
@@ -233,10 +233,21 @@ export async function apiRequest<T = unknown>(
   
   while (attempt <= maxRetries) {
     try {
+      const serializedBody = options.body ? JSON.stringify(options.body, (_key, value) => {
+        // Guard: if an object has only sequential numeric keys, it was meant to be an array
+        if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+          const keys = Object.keys(value);
+          if (keys.length > 0 && keys.every((k, i) => k === String(i))) {
+            return keys.map(k => value[k]);
+          }
+        }
+        return value;
+      }) : undefined;
+
       const response = await fetch(url, {
         method: options.method,
         headers: requestHeaders,
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        body: serializedBody,
       });
       
       const durationMs = Date.now() - startTime;
