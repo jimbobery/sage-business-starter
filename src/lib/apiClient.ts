@@ -233,16 +233,10 @@ export async function apiRequest<T = unknown>(
   
   while (attempt <= maxRetries) {
     try {
-      const serializedBody = options.body ? JSON.stringify(options.body, (_key, value) => {
-        // Guard: if an object has only sequential numeric keys, it was meant to be an array
-        if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-          const keys = Object.keys(value);
-          if (keys.length > 0 && keys.every((k, i) => k === String(i))) {
-            return keys.map(k => value[k]);
-          }
-        }
-        return value;
-      }) : undefined;
+      // If body is already a string, use it directly (pre-serialized JSON)
+      const serializedBody = options.body
+        ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body))
+        : undefined;
 
       const response = await fetch(url, {
         method: options.method,
