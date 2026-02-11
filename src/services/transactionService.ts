@@ -69,13 +69,22 @@ export const transactionService = {
     
     const dimensions = this.buildDimensions(tx.dimensionSelections, requiredDimensions);
 
-    // Build the payload using plain objects and arrays – no spread of array-like values
-    const requestData = {
+    // Build the payload as a raw JSON string to guarantee arrays stay as arrays
+    const dimensionsJson = dimensions.map(d => {
+      const dimObj: Record<string, unknown> = { Id: d.Dimension.Id };
+      if (d.Dimension.AllocationType) dimObj.AllocationType = d.Dimension.AllocationType;
+      const tags = d.DimensionTags.map(t => {
+        const tagObj: Record<string, unknown> = { Id: t.Id };
+        if (t.Percentage !== undefined) tagObj.Percentage = t.Percentage;
+        return tagObj;
+      });
+      return { Dimension: dimObj, DimensionTags: tags };
+    });
+
+    const requestData = JSON.parse(JSON.stringify({
       Date: tx.date,
       Reference: tx.reference,
-      BankAccount: {
-        Id: bankAccountId,
-      },
+      BankAccount: { Id: bankAccountId },
       Items: [
         {
           Order: 0,
@@ -83,10 +92,10 @@ export const transactionService = {
           AmountType: 'TaxesExcluded',
           Amount: tx.amount,
           TreatAs: treatAs,
-          Dimensions: Array.from(dimensions),
+          Dimensions: dimensionsJson,
         },
       ],
-    };
+    }));
 
     const idempotencyKey = generateIdempotencyKey();
     const response = await apiRequest<CreateTransactionResponse>(
