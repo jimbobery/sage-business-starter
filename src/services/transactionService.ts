@@ -21,34 +21,37 @@ export interface CreateTransactionResponse {
 
 export const transactionService = {
   /**
-   * Build the Dimensions array for a transaction request
+   * Build the Dimensions array for a transaction request.
+   * Returns a plain Array to avoid any object-with-numeric-keys serialisation bug.
    */
   buildDimensions(
     dimensionSelections: Record<string, string>,
     requiredDimensions: RequiredDimension[]
   ): SageTransactionDimension[] {
-    return requiredDimensions
-      .filter(dim => dimensionSelections[dim.code])
-      .map(dim => {
-        const tagCode = dimensionSelections[dim.code];
-        const isAllowability = dim.name.toLowerCase().includes('allowability') || 
-                               dim.code.toLowerCase().includes('allowability');
+    const dims: SageTransactionDimension[] = [];
 
-        const dimension: SageTransactionDimension = {
-          Dimension: {
-            Id: dim.code,
-            ...(isAllowability ? { AllocationType: 'Percentage' } : {}),
+    for (const dim of Array.from(requiredDimensions)) {
+      const tagCode = dimensionSelections[dim.code];
+      if (!tagCode) continue;
+
+      const isAllowability = dim.name.toLowerCase().includes('allowability') || 
+                             dim.code.toLowerCase().includes('allowability');
+
+      dims.push({
+        Dimension: {
+          Id: dim.code,
+          ...(isAllowability ? { AllocationType: 'Percentage' } : {}),
+        },
+        DimensionTags: [
+          {
+            Id: tagCode,
+            ...(isAllowability ? { Percentage: 100 } : {}),
           },
-          DimensionTags: [
-            {
-              Id: tagCode,
-              ...(isAllowability ? { Percentage: 100 } : {}),
-            },
-          ],
-        };
-
-        return dimension;
+        ],
       });
+    }
+
+    return dims;
   },
 
   /**
@@ -66,7 +69,8 @@ export const transactionService = {
     
     const dimensions = this.buildDimensions(tx.dimensionSelections, requiredDimensions);
 
-    const requestData: SageTransactionRequest = {
+    // Build the payload using plain objects and arrays – no spread of array-like values
+    const requestData = {
       Date: tx.date,
       Reference: tx.reference,
       BankAccount: {
@@ -79,7 +83,7 @@ export const transactionService = {
           AmountType: 'TaxesExcluded',
           Amount: tx.amount,
           TreatAs: treatAs,
-          Dimensions: dimensions,
+          Dimensions: Array.from(dimensions),
         },
       ],
     };
