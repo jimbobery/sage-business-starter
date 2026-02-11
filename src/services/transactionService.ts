@@ -69,40 +69,25 @@ export const transactionService = {
     
     const dimensions = this.buildDimensions(tx.dimensionSelections, requiredDimensions);
 
-    // Build the payload as a raw JSON string to guarantee arrays stay as arrays
-    const dimensionsJson = dimensions.map(d => {
-      const dimObj: Record<string, unknown> = { Id: d.Dimension.Id };
-      if (d.Dimension.AllocationType) dimObj.AllocationType = d.Dimension.AllocationType;
-      const tags = d.DimensionTags.map(t => {
-        const tagObj: Record<string, unknown> = { Id: t.Id };
-        if (t.Percentage !== undefined) tagObj.Percentage = t.Percentage;
-        return tagObj;
-      });
-      return { Dimension: dimObj, DimensionTags: tags };
-    });
+    // Build the JSON string manually to guarantee arrays stay as arrays
+    const dimensionsJsonStr = dimensions.map(d => {
+      const allocType = d.Dimension.AllocationType
+        ? `,"AllocationType":"${d.Dimension.AllocationType}"` : '';
+      const tagsStr = d.DimensionTags.map(t => {
+        const pct = t.Percentage !== undefined ? `,"Percentage":${t.Percentage}` : '';
+        return `{"Id":"${t.Id}"${pct}}`;
+      }).join(',');
+      return `{"Dimension":{"Id":"${d.Dimension.Id}"${allocType}},"DimensionTags":[${tagsStr}]}`;
+    }).join(',');
 
-    const requestData = JSON.parse(JSON.stringify({
-      Date: tx.date,
-      Reference: tx.reference,
-      BankAccount: { Id: bankAccountId },
-      Items: [
-        {
-          Order: 0,
-          Date: tx.date,
-          AmountType: 'TaxesExcluded',
-          Amount: tx.amount,
-          TreatAs: treatAs,
-          Dimensions: dimensionsJson,
-        },
-      ],
-    }));
+    const bodyString = `{"Date":"${tx.date}","Reference":"${tx.reference}","BankAccount":{"Id":"${bankAccountId}"},"Items":[{"Order":0,"Date":"${tx.date}","AmountType":"TaxesExcluded","Amount":${tx.amount},"TreatAs":"${treatAs}","Dimensions":[${dimensionsJsonStr}]}]}`;
 
     const idempotencyKey = generateIdempotencyKey();
     const response = await apiRequest<CreateTransactionResponse>(
       {
         method: 'POST',
         endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
-        body: requestData,
+        body: bodyString,
         tokenType: 'tenant',
         featureArea: 'transactions',
         tenantId,
@@ -120,7 +105,7 @@ export const transactionService = {
         {
           method: 'POST',
           endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
-          body: requestData,
+          body: bodyString,
           tokenType: 'tenant',
           featureArea: 'transactions',
           tenantId,
