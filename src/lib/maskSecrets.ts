@@ -43,6 +43,13 @@ export function maskObject(obj: Record<string, unknown> | null | undefined): Rec
     // Check if this key should be redacted
     if (SENSITIVE_HEADERS.includes(lowerKey) || SENSITIVE_FIELDS.includes(key)) {
       masked[key] = REDACTED;
+    } else if (Array.isArray(value)) {
+      // Preserve arrays as arrays, recursively masking each element
+      masked[key] = value.map(item =>
+        item && typeof item === 'object'
+          ? maskObject(item as Record<string, unknown>)
+          : item
+      );
     } else if (typeof value === 'object' && value !== null) {
       // Recursively mask nested objects
       masked[key] = maskObject(value as Record<string, unknown>);
