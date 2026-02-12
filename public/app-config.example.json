@@ -5,5 +5,8 @@
   "subscriptionClientSecret": "your-subscription-client-secret",
   "productCode": "SAGE_ONE",
   "platform": "UK",
-  "businessTypeCode": "SOLE_TRADER"
+  "businessTypeCode": "SOLE_TRADER",
+  "bankOpeningBalanceJournalCode": "",
+  "bankPaymentJournalCode": "",
+  "bankReceiptJournalCode": ""
 }

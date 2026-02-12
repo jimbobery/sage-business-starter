@@ -38,6 +38,8 @@ async function loadFileConfig(): Promise<Credentials | null> {
         platform: config.platform || 'UK',
         businessTypeCode: config.businessTypeCode || 'SOLE_TRADER',
         bankOpeningBalanceJournalCode: config.bankOpeningBalanceJournalCode || '',
+        bankPaymentJournalCode: config.bankPaymentJournalCode || '',
+        bankReceiptJournalCode: config.bankReceiptJournalCode || '',
       };
     }
   } catch {

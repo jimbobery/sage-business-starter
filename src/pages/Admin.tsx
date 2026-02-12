@@ -55,6 +55,8 @@ export default function Admin() {
     platform: '',
     businessTypeCode: '',
     bankOpeningBalanceJournalCode: '',
+    bankPaymentJournalCode: '',
+    bankReceiptJournalCode: '',
   });
 
   useEffect(() => {
@@ -74,6 +76,8 @@ export default function Admin() {
           platform: config.credentials.platform || '',
           businessTypeCode: config.credentials.businessTypeCode || '',
           bankOpeningBalanceJournalCode: config.credentials.bankOpeningBalanceJournalCode || '',
+          bankPaymentJournalCode: config.credentials.bankPaymentJournalCode || '',
+          bankReceiptJournalCode: config.credentials.bankReceiptJournalCode || '',
         });
       }
     };
@@ -443,6 +447,33 @@ export default function Admin() {
                 />
                 <p className="text-xs text-muted-foreground">
                   The journal type ID used in bank opening balance API calls
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="bankPaymentJournalCode">Bank Payment Journal Code</Label>
+                <Input
+                  id="bankPaymentJournalCode"
+                  value={formData.bankPaymentJournalCode}
+                  onChange={(e) => handleChange('bankPaymentJournalCode', e.target.value)}
+                  placeholder="e.g., 7078df86-3c36-f139-1b3a-390d1197b0f8"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The journal type ID used for bank payment transactions
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bankReceiptJournalCode">Bank Receipt Journal Code</Label>
+                <Input
+                  id="bankReceiptJournalCode"
+                  value={formData.bankReceiptJournalCode}
+                  onChange={(e) => handleChange('bankReceiptJournalCode', e.target.value)}
+                  placeholder="e.g., d6be52be-4361-1dc6-21f4-f895bba7ed5a"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The journal type ID used for bank receipt transactions
                 </p>
               </div>
             </div>

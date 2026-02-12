@@ -10,9 +10,9 @@ import {
 } from '@/types/sage';
 import { generateIdempotencyKey } from '@/lib/idempotency';
 
-// Journal IDs for payments and receipts as per Sage API
-const PAYMENT_JOURNAL_ID = '7078df86-3c36-f139-1b3a-390d1197b0f8';
-const RECEIPT_JOURNAL_ID = 'd6be52be-4361-1dc6-21f4-f895bba7ed5a';
+// Default Journal IDs for payments and receipts (fallback if not configured in Admin)
+const DEFAULT_PAYMENT_JOURNAL_ID = '7078df86-3c36-f139-1b3a-390d1197b0f8';
+const DEFAULT_RECEIPT_JOURNAL_ID = 'd6be52be-4361-1dc6-21f4-f895bba7ed5a';
 
 export interface CreateTransactionResponse {
   Id?: string;
@@ -64,7 +64,9 @@ export const transactionService = {
     requiredDimensions: RequiredDimension[],
     credentials: Credentials
   ): Promise<CreateTransactionResponse> {
-    const journalId = tx.type === 'payment' ? PAYMENT_JOURNAL_ID : RECEIPT_JOURNAL_ID;
+    const journalTypeId = tx.type === 'payment' 
+      ? (credentials.bankPaymentJournalCode || DEFAULT_PAYMENT_JOURNAL_ID)
+      : (credentials.bankReceiptJournalCode || DEFAULT_RECEIPT_JOURNAL_ID);
     const treatAs = tx.type === 'receipt' ? 'Debit' : 'Credit';
     
     const dimensions = this.buildDimensions(tx.dimensionSelections, requiredDimensions);
@@ -86,7 +88,7 @@ export const transactionService = {
     const response = await apiRequest<CreateTransactionResponse>(
       {
         method: 'POST',
-        endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
+        endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalTypeId}`,
         rawBody: bodyString,
         tokenType: 'tenant',
         featureArea: 'transactions',
@@ -104,7 +106,7 @@ export const transactionService = {
       const followUp = await apiRequest<CreateTransactionResponse>(
         {
           method: 'POST',
-          endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
+          endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalTypeId}`,
           rawBody: bodyString,
           tokenType: 'tenant',
           featureArea: 'transactions',
