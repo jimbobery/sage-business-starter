@@ -7,6 +7,8 @@ export interface Credentials {
   platform: string;
   businessTypeCode: string;
   bankOpeningBalanceJournalCode: string;
+  bankPaymentJournalCode: string;
+  bankReceiptJournalCode: string;
 }
 
 export interface Tenant {
