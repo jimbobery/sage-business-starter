@@ -87,7 +87,7 @@ export const transactionService = {
       {
         method: 'POST',
         endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
-        body: bodyString,
+        rawBody: bodyString,
         tokenType: 'tenant',
         featureArea: 'transactions',
         tenantId,
@@ -105,7 +105,7 @@ export const transactionService = {
         {
           method: 'POST',
           endpoint: `/transaction/v2/tenant/${tenantId}/journals/${journalId}`,
-          body: bodyString,
+          rawBody: bodyString,
           tokenType: 'tenant',
           featureArea: 'transactions',
           tenantId,

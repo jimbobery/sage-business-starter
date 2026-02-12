@@ -21,6 +21,8 @@ export interface ApiRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   endpoint: string;
   body?: unknown;
+  /** Pre-serialized JSON string – sent as-is, never touched by JSON.stringify */
+  rawBody?: string;
   headers?: Record<string, string>;
   tokenType: TokenType;
   featureArea: FeatureArea;
@@ -165,7 +167,7 @@ export async function apiRequest<T = unknown>(
           method: options.method,
           url: logUrl,
           requestHeaders,
-          requestBody: options.body ? JSON.stringify(options.body, null, 2) : null,
+          requestBody: options.rawBody || (options.body ? JSON.stringify(options.body, null, 2) : null),
           status: 0,
           statusText: 'Auth Failed',
           responseHeaders: {},
@@ -199,7 +201,7 @@ export async function apiRequest<T = unknown>(
         method: options.method,
         url: logUrl,
         requestHeaders,
-        requestBody: options.body ? JSON.stringify(options.body) : null,
+        requestBody: options.rawBody || (options.body ? JSON.stringify(options.body) : null),
         status: 0,
         statusText: 'Auth Error',
         responseHeaders: {},
@@ -233,10 +235,10 @@ export async function apiRequest<T = unknown>(
   
   while (attempt <= maxRetries) {
     try {
-      // If body is already a string, use it directly (pre-serialized JSON)
-      const serializedBody = options.body
-        ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body))
-        : undefined;
+      // Use rawBody verbatim if provided; otherwise JSON.stringify body
+      const serializedBody = options.rawBody
+        ? options.rawBody
+        : (options.body ? JSON.stringify(options.body) : undefined);
 
       const response = await fetch(url, {
         method: options.method,
@@ -264,7 +266,7 @@ export async function apiRequest<T = unknown>(
         method: options.method,
         url: logUrl,
         requestHeaders,
-        requestBody: options.body ? JSON.stringify(options.body) : null,
+        requestBody: options.rawBody ? options.rawBody : (options.body ? JSON.stringify(options.body) : null),
         status: response.status,
         statusText: response.statusText,
         responseHeaders,
@@ -307,7 +309,7 @@ export async function apiRequest<T = unknown>(
           method: options.method,
           url: logUrl,
           requestHeaders,
-          requestBody: options.body ? JSON.stringify(options.body) : null,
+           requestBody: options.rawBody || (options.body ? JSON.stringify(options.body) : null),
           status: 0,
           statusText: 'CORS/Network Error',
           responseHeaders: {},
@@ -350,7 +352,7 @@ export async function apiRequest<T = unknown>(
     method: options.method,
     url: logUrl,
     requestHeaders,
-    requestBody: options.body ? JSON.stringify(options.body) : null,
+    requestBody: options.rawBody || (options.body ? JSON.stringify(options.body) : null),
     status: 0,
     statusText: 'Request Failed',
     responseHeaders: {},
