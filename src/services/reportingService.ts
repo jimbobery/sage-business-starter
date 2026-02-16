@@ -1,5 +1,6 @@
 import { apiClient, apiRequest } from '@/lib/apiClient';
 import { Credentials } from '@/types/sage';
+import { generateIdempotencyKey } from '@/lib/idempotency';
 
 /**
  * Sage Report Engine API integration
@@ -42,6 +43,7 @@ export const reportingService = {
         tokenType: 'tenant',
         featureArea: 'reports',
         tenantId,
+        idempotencyKey: generateIdempotencyKey(),
       },
       credentials
     );
@@ -99,6 +101,7 @@ export const reportingService = {
         tokenType: 'tenant',
         featureArea: 'reports',
         tenantId,
+        idempotencyKey: generateIdempotencyKey(),
       },
       credentials
     );
