@@ -1,4 +1,4 @@
-import { apiClient, apiRequest } from '@/lib/apiClient';
+import { apiClient, apiRequest, ApiRequestOptions } from '@/lib/apiClient';
 import { Credentials } from '@/types/sage';
 import { generateIdempotencyKey } from '@/lib/idempotency';
 
@@ -7,12 +7,44 @@ import { generateIdempotencyKey } from '@/lib/idempotency';
  * 
  * Two-step flow:
  * 1. POST .../ProfitAndLoss/run  → 201 with { Id: executionId }
- * 2. GET  .../executions/{executionId} → 200 with full report data
+ * 2. GET  .../executions/{executionId} → poll until 200 with full report data
  * 
  * PDF export:
  * 1. POST .../ProfitAndLoss/run?ExportType=pdf → 201 with { Id: executionId }
- * 2. GET  .../exports/{executionId} → 200 with { Url: downloadUrl }
+ * 2. GET  .../exports/{executionId} → poll until 200 with { Url: downloadUrl }
  */
+
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 30; // 60 seconds max
+
+/**
+ * Poll a GET endpoint until we receive a 200 (not 202).
+ */
+async function pollUntilReady<T>(
+  requestOpts: Omit<ApiRequestOptions, 'method'>,
+  credentials: Credentials
+): Promise<T> {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    const response = await apiRequest<T>(
+      { ...requestOpts, method: 'GET', retries: 0 },
+      credentials
+    );
+
+    if (response.status === 200 && response.data) {
+      return response.data;
+    }
+
+    if (response.status === 202) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+      continue;
+    }
+
+    // Any other status is an error
+    throw new Error(response.error || `Unexpected status ${response.status}`);
+  }
+
+  throw new Error('Report generation timed out after 60 seconds');
+}
 
 export const reportingService = {
   /**
@@ -54,10 +86,9 @@ export const reportingService = {
 
     const executionId = runResponse.data.Id;
 
-    // Step 2: GET the execution result
-    const execResponse = await apiRequest<any>(
+    // Step 2: Poll until the execution result is ready (200)
+    return await pollUntilReady<any>(
       {
-        method: 'GET',
         endpoint: `/reportengine/v1/tenant/${tenantId}/reports/executions/${executionId}`,
         tokenType: 'tenant',
         featureArea: 'reports',
@@ -65,12 +96,6 @@ export const reportingService = {
       },
       credentials
     );
-
-    if (!execResponse.success || !execResponse.data) {
-      throw new Error(execResponse.error || 'Failed to fetch P&L execution result');
-    }
-
-    return execResponse.data;
   },
 
   /**
@@ -112,10 +137,9 @@ export const reportingService = {
 
     const executionId = runResponse.data.Id;
 
-    // Step 2: GET the export result (contains download URL)
-    const exportResponse = await apiRequest<{ Url: string }>(
+    // Step 2: Poll until the export result is ready (200)
+    const exportData = await pollUntilReady<{ Url: string }>(
       {
-        method: 'GET',
         endpoint: `/reportengine/v1/tenant/${tenantId}/reports/exports/${executionId}`,
         tokenType: 'tenant',
         featureArea: 'reports',
@@ -124,10 +148,10 @@ export const reportingService = {
       credentials
     );
 
-    if (!exportResponse.success || !exportResponse.data?.Url) {
-      throw new Error(exportResponse.error || 'Failed to fetch PDF export URL');
+    if (!exportData?.Url) {
+      throw new Error('Failed to fetch PDF export URL');
     }
 
-    return exportResponse.data.Url;
+    return exportData.Url;
   },
 };
