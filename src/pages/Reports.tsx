@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useApp } from '@/contexts/AppContext';
 import { useDeveloperMode } from '@/contexts/DeveloperModeContext';
@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { 
   FileText,
   AlertCircle,
-  TrendingUp,
-  TrendingDown,
   RefreshCw,
   Download,
   Loader2,
@@ -27,110 +25,169 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { ProfitLossReport } from '@/types/sage';
 import { ApiIntegrationPanel } from '@/components/developer/ApiIntegrationPanel';
 import { reportingService } from '@/services/reportingService';
 import { useToast } from '@/hooks/use-toast';
 
+// ── Sage Report types ──────────────────────────────────────────
+interface CellFormatting {
+  Variant?: 'Strong' | 'Default';
+  Color?: string;
+  Type?: 'String' | 'Currency' | 'Percentage' | 'Spacer' | 'MultilineString';
+  Alignment?: 'Left' | 'Right' | 'Center';
+}
+
+interface ReportCell {
+  Value: string;
+  Formatting: CellFormatting;
+  MultilineValue?: string[];
+  ColumnId?: number;
+  RowId?: number;
+}
+
+interface ReportRow {
+  Columns: ReportCell[];
+  Children?: ReportRow[];
+  Formatting?: CellFormatting;
+}
+
+interface SageReport {
+  Id: string;
+  Title: string;
+  Subtitle: string;
+  LastRunDate: string;
+  Header: { Columns: ReportCell[] };
+  Rows: ReportRow[];
+  Metadata?: any;
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+
+function formatCellValue(cell: ReportCell): string {
+  if (!cell.Value && cell.Formatting?.Type === 'Spacer') return '';
+  const val = cell.Value;
+  if (cell.Formatting?.Type === 'Currency') {
+    const num = parseFloat(val);
+    if (isNaN(num)) return val;
+    if (cell.Formatting.Color === 'EnclosedError') {
+      return `(£${Math.abs(num).toLocaleString('en-GB', { minimumFractionDigits: 2 })})`;
+    }
+    return `£${num.toLocaleString('en-GB', { minimumFractionDigits: 2 })}`;
+  }
+  if (cell.Formatting?.Type === 'Percentage') {
+    return `${val}%`;
+  }
+  return val;
+}
+
+function cellClasses(cell: ReportCell): string {
+  const parts: string[] = [];
+  if (cell.Formatting?.Variant === 'Strong') parts.push('font-semibold');
+  if (cell.Formatting?.Color === 'EnclosedError') parts.push('text-destructive');
+  if (cell.Formatting?.Alignment === 'Right') parts.push('text-right');
+  else if (cell.Formatting?.Alignment === 'Center') parts.push('text-center');
+  else parts.push('text-left');
+  return parts.join(' ');
+}
+
+function isSpacerRow(row: ReportRow): boolean {
+  return row.Formatting?.Type === 'Spacer' || 
+    row.Columns.every(c => c.Formatting?.Type === 'Spacer' || c.Value === '');
+}
+
+// ── Component ──────────────────────────────────────────────────
+
 export default function Reports() {
-  const { transactions, financialYears, activeTenantId, getActiveTenant, credentials } = useApp();
+  const { financialYears, activeTenantId, getActiveTenant, credentials } = useApp();
   const { isDeveloperMode } = useDeveloperMode();
   const { toast } = useToast();
   const [selectedYearId, setSelectedYearId] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [apiReport, setApiReport] = useState<any>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [sageReport, setSageReport] = useState<SageReport | null>(null);
   const [rawJson, setRawJson] = useState<string>('');
 
   const activeTenant = getActiveTenant();
   const tenantYears = financialYears.filter(y => y.tenantId === activeTenantId);
-  const tenantTransactions = transactions.filter(t => t.tenantId === activeTenantId);
 
-  // Local calculation as fallback
-  const localReport = useMemo<ProfitLossReport | null>(() => {
-    if (!selectedYearId || tenantTransactions.length === 0) return null;
+  const selectedYear = tenantYears.find(y => y.id === selectedYearId);
 
-    const year = tenantYears.find(y => y.id === selectedYearId);
-    if (!year) return null;
-
-    // Filter transactions within the financial year
-    const yearTransactions = tenantTransactions.filter(t => {
-      const date = new Date(t.date);
-      return date >= new Date(year.startDate) && date <= new Date(year.endDate);
-    });
-
-    // Group by category
-    const incomeByCategory: Record<string, number> = {};
-    const expensesByCategory: Record<string, number> = {};
-
-    yearTransactions.forEach(t => {
-      if (t.type === 'receipt') {
-        incomeByCategory[t.category] = (incomeByCategory[t.category] || 0) + t.amount;
-      } else {
-        expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
-      }
-    });
-
-    const income = Object.entries(incomeByCategory).map(([category, amount]) => ({ category, amount }));
-    const expenses = Object.entries(expensesByCategory).map(([category, amount]) => ({ category, amount }));
-    
-    const totalIncome = income.reduce((sum, i) => sum + i.amount, 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-
-    return {
-      periodStart: year.startDate,
-      periodEnd: year.endDate,
-      income,
-      expenses,
-      totalIncome,
-      totalExpenses,
-      netProfit: totalIncome - totalExpenses,
-    };
-  }, [selectedYearId, tenantTransactions, tenantYears]);
-
-  const report = apiReport || localReport;
-
+  // ── Generate report ──────────────────────────────────────────
   const handleGenerate = async () => {
-    if (!selectedYearId || !activeTenantId) return;
-    
-    const year = tenantYears.find(y => y.id === selectedYearId);
-    if (!year) return;
+    if (!selectedYearId || !activeTenantId || !selectedYear) return;
+
+    if (!credentials?.clientId || !credentials?.clientSecret) {
+      toast({
+        title: 'Credentials required',
+        description: 'Please configure API credentials in Admin Settings first.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsGenerating(true);
-    
-    // Check if credentials are configured
-    if (credentials?.clientId && credentials?.clientSecret) {
-      try {
-        const response = await reportingService.getProfitAndLoss(activeTenantId, {
-          startDate: year.startDate,
-          endDate: year.endDate,
-        }, credentials);
-        
-        setApiReport(response);
-        setRawJson(JSON.stringify(response.rawData, null, 2));
-        
-        toast({
-          title: "Report generated",
-          description: "P&L report has been fetched from the API.",
-        });
-      } catch (error: any) {
-        // Fallback to local calculation
-        toast({
-          title: "Using local data",
-          description: error.message || "API call failed, showing local calculation instead.",
-          variant: "destructive",
-        });
-        setApiReport(null);
-        setRawJson('');
-      }
-    } else {
-      // Use local calculation
-      setApiReport(null);
+    try {
+      const data = await reportingService.getProfitAndLoss(
+        activeTenantId,
+        { startDate: selectedYear.startDate, endDate: selectedYear.endDate },
+        credentials
+      );
+      setSageReport(data as SageReport);
+      setRawJson(JSON.stringify(data, null, 2));
+      toast({ title: 'Report generated', description: 'P&L report fetched from the API.' });
+    } catch (error: any) {
+      toast({
+        title: 'Report failed',
+        description: error.message || 'Failed to generate P&L report.',
+        variant: 'destructive',
+      });
+      setSageReport(null);
       setRawJson('');
     }
-    
     setIsGenerating(false);
   };
 
+  // ── Export PDF ───────────────────────────────────────────────
+  const handleExportPdf = async () => {
+    if (!selectedYearId || !activeTenantId || !selectedYear) return;
+
+    if (!credentials?.clientId || !credentials?.clientSecret) {
+      toast({
+        title: 'Credentials required',
+        description: 'Please configure API credentials in Admin Settings first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const pdfUrl = await reportingService.exportProfitAndLossPdf(
+        activeTenantId,
+        { startDate: selectedYear.startDate, endDate: selectedYear.endDate },
+        credentials
+      );
+      // Auto-download the PDF
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.target = '_blank';
+      link.download = `PnL_${selectedYear.startDate}_${selectedYear.endDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({ title: 'PDF exported', description: 'The PDF report is downloading.' });
+    } catch (error: any) {
+      toast({
+        title: 'Export failed',
+        description: error.message || 'Failed to export PDF.',
+        variant: 'destructive',
+      });
+    }
+    setIsExporting(false);
+  };
+
+  // ── No tenant guard ──────────────────────────────────────────
   if (!activeTenantId) {
     return (
       <MainLayout>
@@ -138,7 +195,6 @@ export default function Reports() {
           <div className="page-header">
             <h1 className="page-title">P&L Report</h1>
           </div>
-          
           <div className="bg-warning/10 border border-warning/30 rounded-lg p-6 flex items-start gap-4">
             <AlertCircle className="w-6 h-6 text-warning flex-shrink-0" />
             <div>
@@ -153,6 +209,7 @@ export default function Reports() {
     );
   }
 
+  // ── Render ───────────────────────────────────────────────────
   return (
     <MainLayout>
       <div className="animate-fade-in">
@@ -184,11 +241,8 @@ export default function Reports() {
                 </SelectContent>
               </Select>
             </div>
-            
-            <Button 
-              onClick={handleGenerate}
-              disabled={!selectedYearId || isGenerating}
-            >
+
+            <Button onClick={handleGenerate} disabled={!selectedYearId || isGenerating}>
               {isGenerating ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
@@ -199,19 +253,17 @@ export default function Reports() {
           </div>
         </div>
 
-        {/* Report */}
-        {!report ? (
+        {/* Report content */}
+        {!sageReport ? (
           <div className="bg-card rounded-xl border border-border p-12 text-center">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <FileText className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-medium text-foreground mb-2">No report generated</h3>
             <p className="text-muted-foreground">
-              {tenantYears.length === 0 
-                ? "Create a financial year first to generate reports."
-                : tenantTransactions.length === 0
-                  ? "Upload some transactions to generate a report."
-                  : "Select a financial year and click Generate Report."}
+              {tenantYears.length === 0
+                ? 'Create a financial year first to generate reports.'
+                : 'Select a financial year and click Generate Report.'}
             </p>
           </div>
         ) : (
@@ -225,132 +277,65 @@ export default function Reports() {
                 </TabsTrigger>
               </TabsList>
             )}
-            
+
             <TabsContent value="summary" className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="stat-card">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-success" />
-                    </div>
-                    <span className="stat-label">Total Income</span>
-                  </div>
-                  <div className="stat-value text-success">
-                    £{report.totalIncome.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                      <TrendingDown className="w-5 h-5 text-destructive" />
-                    </div>
-                    <span className="stat-label">Total Expenses</span>
-                  </div>
-                  <div className="stat-value text-destructive">
-                    £{report.totalExpenses.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div className="stat-card">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={cn(
-                      "w-10 h-10 rounded-lg flex items-center justify-center",
-                      report.netProfit >= 0 ? "bg-success/10" : "bg-destructive/10"
-                    )}>
-                      {report.netProfit >= 0 ? (
-                        <TrendingUp className="w-5 h-5 text-success" />
-                      ) : (
-                        <TrendingDown className="w-5 h-5 text-destructive" />
-                      )}
-                    </div>
-                    <span className="stat-label">Net Profit</span>
-                  </div>
-                  <div className={cn(
-                    "stat-value",
-                    report.netProfit >= 0 ? "text-success" : "text-destructive"
-                  )}>
-                    £{Math.abs(report.netProfit).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Detailed Report */}
+              {/* Report table */}
               <div className="bg-card rounded-xl border border-border overflow-hidden">
                 <div className="p-4 border-b border-border bg-muted/50 flex items-center justify-between">
                   <div>
-                    <h2 className="section-title">Profit & Loss Statement</h2>
+                    <h2 className="section-title">{sageReport.Title || 'Profit & Loss Statement'}</h2>
                     <p className="section-description">
-                      {new Date(report.periodStart).toLocaleDateString('en-GB')} - {new Date(report.periodEnd).toLocaleDateString('en-GB')}
+                      {sageReport.Subtitle}
+                      {sageReport.LastRunDate && (
+                        <> · Generated {new Date(sageReport.LastRunDate).toLocaleString('en-GB')}</>
+                      )}
                     </p>
                   </div>
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportPdf}
+                    disabled={isExporting}
+                  >
+                    {isExporting ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Export PDF
                   </Button>
                 </div>
-                
-                <div className="p-6">
-                  {/* Income Section */}
-                  <div className="mb-8">
-                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-success" />
-                      Income
-                    </h3>
-                    <div className="space-y-2">
-                      {report.income.map((item, index) => (
-                        <div key={index} className="flex justify-between py-2 border-b border-border/50">
-                          <span className="text-foreground">{item.category}</span>
-                          <span className="font-medium text-success">
-                            £{item.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between py-2 font-semibold">
-                        <span>Total Income</span>
-                        <span className="text-success">
-                          £{report.totalIncome.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Expenses Section */}
-                  <div className="mb-8">
-                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <TrendingDown className="w-5 h-5 text-destructive" />
-                      Expenses
-                    </h3>
-                    <div className="space-y-2">
-                      {report.expenses.map((item, index) => (
-                        <div key={index} className="flex justify-between py-2 border-b border-border/50">
-                          <span className="text-foreground">{item.category}</span>
-                          <span className="font-medium text-destructive">
-                            £{item.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    {/* Header row */}
+                    <thead>
+                      <tr className="bg-muted/30 border-b border-border">
+                        {sageReport.Header.Columns.map((col, i) => (
+                          <th
+                            key={i}
+                            className={cn(
+                              'px-3 py-2 whitespace-nowrap',
+                              i === 0 ? 'sticky left-0 bg-muted/30 z-10 min-w-[200px]' : 'min-w-[100px]',
+                              col.Formatting?.Type === 'Spacer' ? 'w-4 min-w-[16px]' : '',
+                              cellClasses(col)
+                            )}
+                          >
+                            {col.MultilineValue
+                              ? col.MultilineValue.map((line, li) => (
+                                  <div key={li}>{line}</div>
+                                ))
+                              : col.Value}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sageReport.Rows.map((row, ri) => (
+                        <ReportRowGroup key={ri} row={row} depth={0} />
                       ))}
-                      <div className="flex justify-between py-2 font-semibold">
-                        <span>Total Expenses</span>
-                        <span className="text-destructive">
-                          £{report.totalExpenses.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Net Profit */}
-                  <div className="border-t-2 border-border pt-4">
-                    <div className="flex justify-between text-lg font-bold">
-                      <span>Net Profit / (Loss)</span>
-                      <span className={report.netProfit >= 0 ? "text-success" : "text-destructive"}>
-                        {report.netProfit < 0 && '('}
-                        £{Math.abs(report.netProfit).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                        {report.netProfit < 0 && ')'}
-                      </span>
-                    </div>
-                  </div>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </TabsContent>
@@ -373,24 +358,69 @@ export default function Reports() {
           </Tabs>
         )}
 
-        {/* API Integration Panel - Only visible in Developer Mode */}
+        {/* API Integration Panel */}
         {isDeveloperMode && (
           <div className="mt-8">
             <ApiIntegrationPanel featureArea="reports" />
           </div>
         )}
 
-        {/* API Info - Always visible when not in dev mode */}
         {!isDeveloperMode && (
           <div className="mt-8 p-4 bg-muted rounded-lg">
             <h3 className="font-medium text-foreground mb-2">API Integration</h3>
             <p className="text-sm text-muted-foreground">
-              The P&L report is generated via <code className="bg-background px-1 rounded">GET /reports/profit_and_loss</code> 
+              The P&L report is generated via{' '}
+              <code className="bg-background px-1 rounded">POST /reports/ProfitAndLoss/run</code>{' '}
               with date range parameters matching the selected financial year.
             </p>
           </div>
         )}
       </div>
     </MainLayout>
+  );
+}
+
+// ── Row rendering component ─────────────────────────────────────
+function ReportRowGroup({ row, depth }: { row: ReportRow; depth: number }) {
+  if (isSpacerRow(row)) {
+    return (
+      <tr className="h-3">
+        <td colSpan={row.Columns.length} />
+      </tr>
+    );
+  }
+
+  const firstCell = row.Columns[0];
+  const isSection = firstCell?.Formatting?.Variant === 'Strong';
+
+  return (
+    <>
+      <tr
+        className={cn(
+          'border-b border-border/40 hover:bg-muted/20 transition-colors',
+          isSection && depth === 0 && 'bg-muted/10',
+          isSection && 'border-b-border'
+        )}
+      >
+        {row.Columns.map((cell, ci) => (
+          <td
+            key={ci}
+            className={cn(
+              'px-3 py-1.5 whitespace-nowrap',
+              ci === 0 && 'sticky left-0 bg-card z-10',
+              ci === 0 && isSection && depth === 0 && 'bg-muted/10',
+              cell.Formatting?.Type === 'Spacer' ? 'w-4' : '',
+              cellClasses(cell)
+            )}
+            style={ci === 0 && depth > 0 ? { paddingLeft: `${12 + depth * 16}px` } : undefined}
+          >
+            {formatCellValue(cell)}
+          </td>
+        ))}
+      </tr>
+      {row.Children?.map((child, ci) => (
+        <ReportRowGroup key={ci} row={child} depth={depth + 1} />
+      ))}
+    </>
   );
 }
