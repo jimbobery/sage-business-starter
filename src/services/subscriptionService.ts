@@ -75,6 +75,7 @@ export const subscriptionService = {
     };
 
     onStatusChange?.('Creating tenant...');
+    console.log("creating tenant");
 
     // Make initial request
     const response = await apiRequest<CreateTenantResponse | AsyncResponse>(
@@ -92,8 +93,9 @@ export const subscriptionService = {
 
     // Handle 202 Accepted - async processing
     if (response.status === 202) {
-      const asyncData = response.data as AsyncResponse;
-      const retryAfter = parseInt(asyncData['retry-after'] || '5', 10);
+      const asyncHeader = response.headers as AsyncResponse;
+      console.log(asyncHeader);
+      const retryAfter = parseInt(asyncHeader['retry-after'] || '5', 10);
       
       onStatusChange?.(`Processing... waiting ${retryAfter} seconds`);
       
