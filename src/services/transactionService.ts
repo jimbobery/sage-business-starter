@@ -82,7 +82,7 @@ export const transactionService = {
       return `{"Dimension":{"Id":"${d.Dimension.Id}"${allocType}},"DimensionTags":[${tagsStr}]}`;
     }).join(',');
 
-    const bodyString = `{"Date":"${tx.date}","Reference":"${tx.reference}","BankAccount":{"Id":"${bankAccountId}"},"Items":[{"Order":0,"Date":"${tx.date}","AmountType":"TaxesExcluded","Amount":${tx.amount},"TreatAs":"${treatAs}","Dimensions":[${dimensionsJsonStr}]}]}`;
+    const bodyString = `{"Date":"${tx.date}","Reference":"${tx.reference}","BankAccount":{"Id":"${bankAccountId}"},"Draft":false,"Items":[{"Order":0,"Date":"${tx.date}","AmountType":"TaxesExcluded","Amount":${tx.amount},"TreatAs":"${treatAs}","Dimensions":[${dimensionsJsonStr}]}]}`;
 
     const idempotencyKey = generateIdempotencyKey();
     const response = await apiRequest<CreateTransactionResponse>(
