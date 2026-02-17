@@ -93,7 +93,7 @@ export const subscriptionService = {
 
     // Handle 202 Accepted - async processing
     if (response.status === 202) {
-      const asyncHeader = response.headers as AsyncResponse;
+      const asyncHeader = response.headers as unknown as AsyncResponse;
       console.log(asyncHeader);
       const retryAfter = parseInt(asyncHeader['retry-after'] || '5', 10);
       
