@@ -138,7 +138,7 @@ export const reportingService = {
     const executionId = runResponse.data.Id;
 
     // Step 2: Poll until the export result is ready (200)
-    const exportData = await pollUntilReady<{ Url: string }>(
+    const exportData = await pollUntilReady<{ URL: string }>(
       {
         endpoint: `/reportengine/v1/tenant/${tenantId}/reports/exports/${executionId}`,
         tokenType: 'tenant',
@@ -147,11 +147,11 @@ export const reportingService = {
       },
       credentials
     );
-
-    if (!exportData?.Url) {
+    
+    if (!exportData?.URL) {
       throw new Error('Failed to fetch PDF export URL');
     }
 
-    return exportData.Url;
+    return exportData.URL;
   },
 };
